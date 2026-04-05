@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 
 # 1. 設定 App 頁面
 st.set_page_config(page_title="00631L 實戰大腦", page_icon="🤖", layout="centered")
-st.title("🤖 00631L 實戰大腦 (詳細數據版)")
+st.title("🤖 00631L 實戰大腦 V3")
 
 # 2. 側邊欄參數設定
 st.sidebar.header("⚙️ 參數設定")
@@ -30,30 +30,48 @@ try:
     actual_shares = temp_df['庫存股數'].sum()
     actual_cost = temp_df['持有成本'].sum()
     
-    st.sidebar.success(f"✅ 雲端同步成功！\n庫存：{actual_shares:,.0f} 股\n成本：{actual_cost:,.0f} 元")
+    st.sidebar.success("✅ 雲端資料庫同步成功！")
 except Exception as e:
     st.sidebar.error("❌ 雲端庫存讀取失敗，改為0股代入計算。")
     actual_shares, actual_cost = 0, 0
 
 # 4. 核心運算按鈕
-if st.button("🚀 啟動最新盤中決策", use_container_width=True):
-    with st.spinner('📡 正在抓取即時行情並深度分析中...'):
+if st.button("🚀 啟動最新盤中決策與分析", use_container_width=True):
+    with st.spinner('📡 正在抓取即時行情並還原歷史股價...'):
         TICKER = "00631L.TW"
-        # 多抓一點資料來畫圖 (近一年)
-        data = yf.download(TICKER, period="1y", progress=False)
+        # 為了包含 3/23 之前的資料，抓取 max 歷史資料
+        data = yf.download(TICKER, period="max", progress=False, auto_adjust=False)
         
-        # 修正 yfinance 新版的雙層表格格式問題
+        # 處理 yfinance 多重索引問題
         if isinstance(data.columns, pd.MultiIndex):
-            close_prices = data['Close'][TICKER].dropna()
+            if 'Adj Close' in data.columns.get_level_values(0):
+                raw_prices = data['Adj Close'][TICKER].dropna()
+            else:
+                raw_prices = data['Close'][TICKER].dropna()
         else:
-            close_prices = data['Close'].dropna()
+            if 'Adj Close' in data.columns:
+                raw_prices = data['Adj Close'].dropna()
+            else:
+                raw_prices = data['Close'].dropna()
+                
+        raw_prices.index = pd.to_datetime(raw_prices.index).tz_localize(None)
+
+        # 🔧 執行 3/23 股價還原邏輯 (除以 22)
+        adj_prices = raw_prices.copy()
+        split_cutoff = pd.to_datetime('2026-03-23')
+        mask = (adj_prices.index < split_cutoff) & (adj_prices > 100)
+        if mask.any():
+            adj_prices.loc[mask] = round(adj_prices.loc[mask] / 22.0, 2)
             
-        current_p = float(close_prices.iloc[-1])
-        yest_close = float(close_prices.iloc[-2])
+        current_p = float(adj_prices.iloc[-1])
+        yest_close = float(adj_prices.iloc[-2])
         
-        # V3 加碼邏輯
+        # 計算詳細庫存數據
         cur_val = actual_shares * current_p
-        pnl_real = (cur_val - actual_cost) / actual_cost if actual_cost > 0 else 0
+        abs_pnl = cur_val - actual_cost
+        pnl_real = abs_pnl / actual_cost if actual_cost > 0 else 0
+        avg_cost = actual_cost / actual_shares if actual_shares > 0 else 0
+        
         intraday_drop = (current_p - yest_close) / yest_close
         
         # 判斷加碼指令與動態基準
@@ -86,17 +104,27 @@ if st.button("🚀 啟動最新盤中決策", use_container_width=True):
         # 📊 手機版詳細 UI 介面
         # ==========================================
         
-        st.subheader("📊 1. 個人庫存與損益現況")
-        c1, c2 = st.columns(2)
-        c1.metric("總市值 (元)", f"{cur_val:,.0f}")
-        c2.metric("未實現損益", f"{pnl_real*100:+.2f}%", f"總成本: {actual_cost:,.0f}")
+        st.subheader("📋 1. 詳細庫存與損益明細")
         
+        # 第一排數據
+        c1, c2 = st.columns(2)
+        c1.metric("總市值 (元)", f"NT$ {cur_val:,.0f}")
+        c2.metric("總投入成本", f"NT$ {actual_cost:,.0f}")
+        
+        # 第二排數據
+        c3, c4 = st.columns(2)
+        c3.metric("未實現總損益", f"NT$ {abs_pnl:,.0f}", f"{pnl_real*100:+.2f}%")
+        c4.metric("持有均價", f"NT$ {avg_cost:,.2f}")
+        
+        # 第三排數據
+        c5, c6 = st.columns(2)
+        c5.metric("庫存總股數", f"{actual_shares:,.0f} 股")
+        c6.metric("今日還原現價", f"NT$ {current_p:.2f}", f"{intraday_drop*100:+.2f}%")
+
         st.divider()
         
         st.subheader("📈 2. 即時盤中決策台")
-        c3, c4 = st.columns(2)
-        c3.metric("今日現價", f"{current_p:.2f}", f"{intraday_drop*100:+.2f}%")
-        c4.metric("動態基準金額", f"{v3_dynamic_base:,.0f}")
+        st.write(f"🔹 **當前動態基準金額：** NT$ {v3_dynamic_base:,.0f}")
         
         if intraday_drop <= -0.03:
             st.error(f"💡 **盤中行動指令**：\n\n{suggest_buy_action}")
@@ -109,7 +137,6 @@ if st.button("🚀 啟動最新盤中決策", use_container_width=True):
         st.write(f"🔹 **總淨資產 (股+現-債):** NT$ {net_asset:,.0f}")
         st.write(f"🔹 **目前實際曝險度:** **{current_exposure*100:.2f}%** (目標: {target_exp_pct}%)")
         
-        # 給出明確的買賣數字
         if rebalance_diff > 0:
             st.warning(f"🚨 【曝險過高】若要嚴格再平衡，應減碼賣出市值： **NT$ {rebalance_diff:,.0f}**")
         elif rebalance_diff < 0:
@@ -119,9 +146,11 @@ if st.button("🚀 啟動最新盤中決策", use_container_width=True):
 
         st.divider()
 
-        st.subheader("🌐 4. 00631L 近一年走勢圖")
+        st.subheader("🌐 4. 00631L 歷史還原走勢圖")
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=close_prices.index, y=close_prices.values, mode='lines', name='股價', line=dict(color='#E71D36', width=2)))
+        # 繪製近兩年的還原股價圖，讓 3/23 的分界線清楚顯示
+        recent_prices = adj_prices[adj_prices.index >= pd.to_datetime('2024-01-01')]
+        fig.add_trace(go.Scatter(x=recent_prices.index, y=recent_prices.values, mode='lines', name='還原股價', line=dict(color='#E71D36', width=2)))
         fig.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=30, b=0), hovermode='x unified', height=300)
         st.plotly_chart(fig, use_container_width=True)
 
