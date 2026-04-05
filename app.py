@@ -22,9 +22,7 @@ try:
     conn = st.connection("gsheets", type=GSheetsConnection)
     df_trades = conn.read()
     
-    # 計算即時庫存與成本
     df_trades['成交日期'] = pd.to_datetime(df_trades['成交日期'])
-    # 處理賣出為負值
     temp_df = df_trades.copy()
     temp_df.loc[temp_df['交易類型'].str.contains('賣出', na=False), '庫存股數'] = -temp_df['庫存股數'].abs()
     temp_df.loc[temp_df['交易類型'].str.contains('賣出', na=False), '持有成本'] = -temp_df['持有成本'].abs()
@@ -33,8 +31,8 @@ try:
     actual_cost = temp_df['持有成本'].sum()
     
     st.sidebar.success(f"✅ 雲端同步成功！\n目前庫存：{actual_shares:,.0f} 股")
-except:
-    st.sidebar.error("❌ 雲端資料庫連線失敗，請檢查 Secrets 設定")
+except Exception as e:
+    st.sidebar.error(f"❌ 雲端庫存讀取失敗，改為0股代入計算。\n({e})")
     actual_shares, actual_cost = 0, 0
 
 # 4. 核心運算按鈕
@@ -42,24 +40,55 @@ if st.button("🚀 啟動最新盤中決策", use_container_width=True):
     with st.spinner('📡 正在抓取即時行情並運算中...'):
         TICKER = "00631L.TW"
         data = yf.download(TICKER, period="5d", progress=False)
-        # 取得最新還原價 (簡化版處理)
-        current_p = float(data['Close'].iloc[-1])
-        yest_close = float(data['Close'].iloc[-2])
+        
+        # 🚨 修正 yfinance 新版的雙層表格格式問題
+        if isinstance(data.columns, pd.MultiIndex):
+            close_prices = data['Close'][TICKER].dropna()
+        else:
+            close_prices = data['Close'].dropna()
+            
+        current_p = float(close_prices.iloc[-1])
+        yest_close = float(close_prices.iloc[-2])
         
         # V3 加碼邏輯
         cur_val = actual_shares * current_p
         pnl_real = (cur_val - actual_cost) / actual_cost if actual_cost > 0 else 0
         intraday_drop = (current_p - yest_close) / yest_close
         
-        # 計算曝險
+        # 判斷加碼指令
+        if pnl_real > 0:
+            v3_dynamic_base = base_m * (1 - min(pnl_real, 0.20))
+        else:
+            v3_dynamic_base = base_m * (1 + min(abs(pnl_real) * 2, 1.00))
+            
+        suggest_buy_action = "無須動作 (維持紀律等待)"
+        if intraday_drop <= -0.03:
+            d = abs(intraday_drop)
+            if d >= 0.15: mult = 4.0; level_str = "重壓加碼"
+            elif d >= 0.10: mult = 3.0; level_str = "恐慌買進"
+            elif d >= 0.08: mult = 2.0; level_str = "恐慌買進"
+            elif d >= 0.06: mult = 1.5; level_str = "中型修正"
+            elif d >= 0.05: mult = 1.0; level_str = "標準買點"
+            elif d >= 0.04: mult = 0.5; level_str = "波段低接"
+            else: mult = 0.25; level_str = "日常試單"
+            
+            suggest_buy_amount = v3_dynamic_base * mult
+            suggest_buy_action = f"⚠️ 觸發大跌加碼！級別：{level_str} | 應投入：NT$ {suggest_buy_amount:,.0f}"
+        
+        # 曝險計算
         net_asset = cur_val + cash - (loan1 + loan2)
         current_exposure = (cur_val * 2) / net_asset if net_asset > 0 else 0
         
         # 顯示結果
         st.subheader("📈 即時盤中決策台")
         c1, c2 = st.columns(2)
-        c1.metric("今日現價", f"{current_p:.2f}", f"{intraday_drop*100:.2f}%")
-        c2.metric("總市值", f"{cur_val:,.0f}")
+        c1.metric("今日現價", f"{current_p:.2f}", f"{intraday_drop*100:+.2f}%")
+        c2.metric("總市值", f"NT$ {cur_val:,.0f}")
+        
+        if intraday_drop <= -0.03:
+            st.error(f"💡 **盤中行動指令**：\n\n{suggest_buy_action}")
+        else:
+            st.info(f"💡 **盤中行動指令**：\n\n{suggest_buy_action}")
         
         st.divider()
         st.subheader("⚖️ 曝險檢視")
