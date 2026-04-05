@@ -66,13 +66,16 @@ if st.button("🚀 啟動最新盤中決策與分析", use_container_width=True)
         current_p = float(adj_prices.iloc[-1])
         yest_close = float(adj_prices.iloc[-2])
         
-        # 計算詳細庫存數據
+        # 計算詳細庫存與損益數據
         cur_val = actual_shares * current_p
         abs_pnl = cur_val - actual_cost
         pnl_real = abs_pnl / actual_cost if actual_cost > 0 else 0
         avg_cost = actual_cost / actual_shares if actual_shares > 0 else 0
         
         intraday_drop = (current_p - yest_close) / yest_close
+        
+        # 🌟 新增：今日損益計算
+        today_pnl = (current_p - yest_close) * actual_shares
         
         # 判斷加碼指令與動態基準
         if pnl_real > 0:
@@ -106,20 +109,26 @@ if st.button("🚀 啟動最新盤中決策與分析", use_container_width=True)
         
         st.subheader("📋 1. 詳細庫存與損益明細")
         
-        # 第一排數據
+        # 第一排數據：資金總覽
         c1, c2 = st.columns(2)
         c1.metric("總市值 (元)", f"NT$ {cur_val:,.0f}")
         c2.metric("總投入成本", f"NT$ {actual_cost:,.0f}")
         
-        # 第二排數據
+        # 第二排數據：損益對決
         c3, c4 = st.columns(2)
         c3.metric("未實現總損益", f"NT$ {abs_pnl:,.0f}", f"{pnl_real*100:+.2f}%")
-        c4.metric("持有均價", f"NT$ {avg_cost:,.2f}")
+        # 🌟 這裡放你要求的今日損益，並附上今日漲跌幅
+        c4.metric("今日損益", f"NT$ {today_pnl:,.0f}", f"{intraday_drop*100:+.2f}%")
         
-        # 第三排數據
+        # 第三排數據：部位細節
         c5, c6 = st.columns(2)
         c5.metric("庫存總股數", f"{actual_shares:,.0f} 股")
-        c6.metric("今日還原現價", f"NT$ {current_p:.2f}", f"{intraday_drop*100:+.2f}%")
+        c6.metric("持有均價", f"NT$ {avg_cost:,.2f}")
+        
+        # 第四排數據：市場現狀
+        c7, c8 = st.columns(2)
+        c7.metric("今日還原現價", f"NT$ {current_p:.2f}")
+        c8.metric("昨日還原收盤", f"NT$ {yest_close:.2f}")
 
         st.divider()
         
