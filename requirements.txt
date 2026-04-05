@@ -3,4 +3,4 @@ yfinance
 pandas
 numpy
 plotly
-streamlit-gsheets-connection
+st-gsheets-connection
