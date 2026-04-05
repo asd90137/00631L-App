@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 
 # ==========================================
-# 賴賴投資戰情室 V3.9 - 美股純淨明細版
+# 賴賴投資戰情室 V3.9 - 美股純淨明細版 (修正語意)
 # ==========================================
 
 # 1. 設定 App 頁面
@@ -206,8 +206,9 @@ if st.session_state.analyzed:
             curr_soxx = soxx_close.iloc[-1]
             curr_dma = soxx_100dma.iloc[-1]
             
+            # 💡 修正這裡的語意錯誤！
             if curr_soxx > curr_dma:
-                st.success(f"🟢 **SOXX 多頭續抱** | 現價:{curr_soxx:.2f} (100DMA:{curr_dma:.2f})\n\n**指令：趨勢向上，SOXL 獲利了結。**")
+                st.success(f"🟢 **SOXX 多頭續抱** | 現價:{curr_soxx:.2f} (100DMA:{curr_dma:.2f})\n\n**指令：趨勢向上，SOXL 持續抱牢。**")
             else:
                 st.error(f"🔴 **停利訊號觸發！** | 現價跌破 100DMA ({curr_dma:.2f})\n\n**指令：全數賣出 SOXL 轉入 TLT。**")
             
@@ -268,7 +269,6 @@ if st.session_state.analyzed:
                 today_pnl_val = (p_curr - p_yest) * shares
                 today_pnl_pct = (p_curr / p_yest - 1)
                 
-                # 回歸最簡潔的條列式設計，但加上今日損益！
                 st.markdown(f"#### 📌 **{t}**")
                 st.write(f"🔹 **今日現價:** ${p_curr:.2f} ({today_pnl_pct*100:+.2f}%) ｜ **今日損益:** ${today_pnl_val:,.2f}")
                 st.write(f"🔹 **持有均價:** ${avg_cost:.2f} ｜ **未實現損益:** ${abs_pnl:,.2f} ({pnl_pct*100:+.2f}%)")
