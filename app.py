@@ -6,38 +6,40 @@ import plotly.graph_objects as go
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 
+# ==========================================
+# 賴賴投資戰情室 V3.9 - 美股純淨明細版
+# ==========================================
+
 # 1. 設定 App 頁面
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
-st.title("🛡️ 賴賴投資戰情室 V3.5")
+st.title("🛡️ 賴賴投資戰情室 V3.9")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
 
-# 2. 側邊欄參數設定
-st.sidebar.header("⚙️ 參數設定")
+# 2. 側邊欄參數設定 
+st.sidebar.header("⚙️ 台股參數")
 loan1 = st.sidebar.number_input("1. 信貸一剩餘本金", value=2056231)
 loan2 = st.sidebar.number_input("2. 信貸二剩餘本金", value=935907)
 base_m = st.sidebar.number_input("3. 基準每月定期定額", value=100000)
-cash = st.sidebar.number_input("4. 目前帳戶可用現金", value=0)
+cash = st.sidebar.number_input("4. 目前帳戶可用現金", value=2000000)
 target_exp_pct = st.sidebar.number_input("5. 設定目標曝險度 (%)", value=200)
 
-# 3. 雲端資料庫連動 (Google Sheets)
+# 3. 雲端資料庫連動 
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
     df_trades_raw = conn.read(ttl=0) 
     
     temp_df = df_trades_raw.copy()
     temp_df['成交日期'] = pd.to_datetime(temp_df['成交日期'])
-    
     temp_df.loc[temp_df['交易類型'].str.contains('賣出', na=False), '庫存股數'] = -temp_df['庫存股數'].abs()
     temp_df.loc[temp_df['交易類型'].str.contains('賣出', na=False), '持有成本'] = -temp_df['持有成本'].abs()
     
     actual_shares = temp_df['庫存股數'].sum()
     actual_cost = temp_df['持有成本'].sum()
-    
-    st.sidebar.success("✅ 雲端資料庫同步成功！")
+    st.sidebar.success("✅ 台股資料同步成功！")
 except Exception as e:
-    st.sidebar.error("❌ 雲端庫存讀取失敗，改為0股代入計算。")
+    st.sidebar.error("❌ 台股資料讀取失敗，改為0股代入計算。")
     df_trades_raw = pd.DataFrame()
     actual_shares, actual_cost = 0, 0
 
@@ -105,7 +107,7 @@ if st.session_state.analyzed:
             target_stock_value = ((target_exp_pct / 100.0) * net_asset) / 2
             rebalance_diff = cur_val - target_stock_value
             
-            st.subheader("📋 1. 詳細庫存與損益明細")
+            st.subheader("📊 詳細庫存與損益明細")
             c1, c2 = st.columns(2)
             c1.metric("總市值 (元)", f"NT$ {cur_val:,.0f}")
             c2.metric("總投入成本", f"NT$ {actual_cost:,.0f}")
@@ -123,7 +125,8 @@ if st.session_state.analyzed:
             c8.metric("昨日還原收盤", f"NT$ {yest_close:.2f}")
 
             st.divider()
-            st.subheader("📈 2. 即時盤中決策台")
+            
+            st.subheader("📈 即時盤中決策台")
             st.write(f"🔹 **當前動態基準金額：** NT$ {v3_dynamic_base:,.0f}")
             
             if intraday_drop <= -0.03:
@@ -132,7 +135,8 @@ if st.session_state.analyzed:
                 st.info(f"💡 **盤中行動指令**：\n\n{suggest_buy_action}")
             
             st.divider()
-            st.subheader("⚖️ 3. 資產再平衡詳細檢視")
+            
+            st.subheader("⚖️ 資產再平衡詳細檢視")
             st.write(f"🔹 **總淨資產 (股+現-債):** NT$ {net_asset:,.0f}")
             st.write(f"🔹 **目前實際曝險度:** **{current_exposure*100:.2f}%** (目標: {target_exp_pct}%)")
             
@@ -144,7 +148,8 @@ if st.session_state.analyzed:
                 st.success("✅ 目前曝險完美符合目標，不需調整。")
 
             st.divider()
-            st.subheader("🌐 4. 00631L 歷史還原走勢圖")
+            
+            st.subheader("🌐 00631L 歷史還原走勢圖")
             fig = go.Figure()
             recent_prices = adj_prices[adj_prices.index >= pd.to_datetime('2024-01-01')]
             fig.add_trace(go.Scatter(x=recent_prices.index, y=recent_prices.values, mode='lines', name='還原股價', line=dict(color='#E71D36', width=2)))
@@ -152,7 +157,7 @@ if st.session_state.analyzed:
             st.plotly_chart(fig, use_container_width=True)
 
         st.divider()
-        st.subheader("📝 5. 新增交易紀錄")
+        st.subheader("📝 新增交易紀錄 (同步至 Google 試算表)")
         col_a, col_b = st.columns(2)
         trade_date = col_a.date_input("成交日期", datetime.today())
         trade_type = col_b.selectbox("交易類型", ["現股買入", "現股賣出"])
@@ -177,36 +182,34 @@ if st.session_state.analyzed:
                     try:
                         conn.update(data=updated_df)
                         st.cache_data.clear() 
-                        st.success("✅ 紀錄已寫入！請點擊上方「啟動掃描」重新抓取。")
+                        st.success("✅ 交易紀錄已寫入！請點擊上方「啟動全面掃描」按鈕重新讀取。")
                     except Exception as e:
                         st.error(f"❌ 寫入失敗。({e})")
 
     # ==========================================
-    # 🇺🇸 分頁二：美股狙擊系統
+    # 🇺🇸 分頁二：美股狙擊系統 (純文字俐落版)
     # ==========================================
     with tab2:
         with st.spinner('📡 抓取美股數據中...'):
             tickers = ["SOXX", "SOXL", "TMF", "BITX"]
             us_data = yf.download(tickers, period="200d", progress=False)
             
-            # --- 核心持倉參數 ---
             us_positions = {
                 "SOXL": {"shares": 545, "cost": 50.99},
                 "TMF": {"shares": 1050, "cost": 52.94},
                 "BITX": {"shares": 11, "cost": 29.67}
             }
             
-            # --- 1. SOXX & 階梯監測 ---
-            st.subheader("🎯 SOXX 趨勢監測與階梯")
+            st.subheader("🎯 1. 大盤趨勢與輪動階梯")
             soxx_close = us_data['Close']['SOXX'].dropna()
             soxx_100dma = soxx_close.rolling(window=100).mean()
             curr_soxx = soxx_close.iloc[-1]
             curr_dma = soxx_100dma.iloc[-1]
             
             if curr_soxx > curr_dma:
-                st.success(f"🟢 **SOXX 多頭續抱** | 現價:{curr_soxx:.2f} (100DMA:{curr_dma:.2f})")
+                st.success(f"🟢 **SOXX 多頭續抱** | 現價:{curr_soxx:.2f} (100DMA:{curr_dma:.2f})\n\n**指令：趨勢向上，SOXL 獲利了結。**")
             else:
-                st.error(f"🔴 **停利訊號觸發！** | 現價跌破 100DMA ({curr_dma:.2f})，請考慮轉入 TLT。")
+                st.error(f"🔴 **停利訊號觸發！** | 現價跌破 100DMA ({curr_dma:.2f})\n\n**指令：全數賣出 SOXL 轉入 TLT。**")
             
             curr_soxl = float(us_data['Close']['SOXL'].dropna().iloc[-1])
             steps = [30.14, 21.09, 14.77]
@@ -217,10 +220,10 @@ if st.session_state.analyzed:
                     cols[i].warning(f"✅ 階梯 {i+3}\n已達標\n${target}")
                 else:
                     cols[i].info(f"⏳ 階梯 {i+3}\n目標 ${target}\n距 {((curr_soxl/target)-1)*100:.1f}%")
+            st.caption(f"🔹 **SOXL 目前現價：${curr_soxl:.2f}**")
             
             st.divider()
 
-            # --- 2. 美股總資產計算 ---
             total_us_val = 0
             total_us_cost = 0
             total_today_pnl = 0
@@ -240,10 +243,10 @@ if st.session_state.analyzed:
             total_pnl_pct = total_abs_pnl / total_us_cost if total_us_cost > 0 else 0
             total_today_pct = total_today_pnl / total_yest_val if total_yest_val > 0 else 0
 
-            st.subheader("📋 美股總資產與損益")
+            st.subheader("📋 2. 美股總資產詳細身價")
             cu1, cu2 = st.columns(2)
-            cu1.metric("總市值 (USD)", f"${total_us_val:,.2f}")
-            cu2.metric("總投入成本 (USD)", f"${total_us_cost:,.2f}")
+            cu1.metric("美股總市值 (USD)", f"${total_us_val:,.2f}")
+            cu2.metric("美股總投入成本 (USD)", f"${total_us_cost:,.2f}")
             
             cu3, cu4 = st.columns(2)
             cu3.metric("未實現總損益", f"${total_abs_pnl:,.2f}", f"{total_pnl_pct*100:+.2f}%")
@@ -251,8 +254,7 @@ if st.session_state.analyzed:
 
             st.divider()
 
-            # --- 3. 個股詳細 8 宮格 ---
-            st.subheader("📦 個股詳細庫存明細")
+            st.subheader("📦 3. 個股明細快報")
             for t, info in us_positions.items():
                 p_curr = float(us_data['Close'][t].dropna().iloc[-1])
                 p_yest = float(us_data['Close'][t].dropna().iloc[-2])
@@ -263,25 +265,14 @@ if st.session_state.analyzed:
                 tot_cost = avg_cost * shares
                 abs_pnl = cur_val - tot_cost
                 pnl_pct = abs_pnl / tot_cost if tot_cost > 0 else 0
-                today_pnl = (p_curr - p_yest) * shares
-                today_drop = (p_curr - p_yest) / p_yest
+                today_pnl_val = (p_curr - p_yest) * shares
+                today_pnl_pct = (p_curr / p_yest - 1)
                 
-                # 使用 Expander 讓畫面乾淨，預設 SOXL 和 TMF 展開
-                with st.expander(f"📌 {t} 庫存明細 (市值: ${cur_val:,.0f})", expanded=(t in ["SOXL", "TMF"])):
-                    c_a, c_b = st.columns(2)
-                    c_a.metric("總市值", f"${cur_val:,.2f}")
-                    c_b.metric("投入成本", f"${tot_cost:,.2f}")
-                    
-                    c_c, c_d = st.columns(2)
-                    c_c.metric("未實現損益", f"${abs_pnl:,.2f}", f"{pnl_pct*100:+.2f}%")
-                    c_d.metric("今日損益", f"${today_pnl:,.2f}", f"{today_drop*100:+.2f}%")
-                    
-                    c_e, c_f = st.columns(2)
-                    c_e.metric("庫存總股數", f"{shares:,.0f} 股")
-                    c_f.metric("持有均價", f"${avg_cost:.2f}")
-                    
-                    c_g, c_h = st.columns(2)
-                    c_g.metric("今日現價", f"${p_curr:.2f}")
-                    c_h.metric("昨日收盤", f"${p_yest:.2f}")
+                # 回歸最簡潔的條列式設計，但加上今日損益！
+                st.markdown(f"#### 📌 **{t}**")
+                st.write(f"🔹 **今日現價:** ${p_curr:.2f} ({today_pnl_pct*100:+.2f}%) ｜ **今日損益:** ${today_pnl_val:,.2f}")
+                st.write(f"🔹 **持有均價:** ${avg_cost:.2f} ｜ **未實現損益:** ${abs_pnl:,.2f} ({pnl_pct*100:+.2f}%)")
+                st.write(f"🔹 **庫存股數:** {shares:,.0f} 股 ｜ **總市值:** ${cur_val:,.2f}")
+                st.markdown("---")
 
-st.caption("📱 提示：將此網頁「加入主畫面」，它就是你的專屬實戰 App！")
+st.caption("📱 提示：將此網頁「加入主畫面」，它就是你的專屬實戰 App！美股延遲約15分鐘。")
