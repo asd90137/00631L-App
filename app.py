@@ -218,4 +218,70 @@ if st.session_state.analyzed:
                 else:
                     cols[i].info(f"⏳ 階梯 {i+3}\n目標 ${target}\n距 {((curr_soxl/target)-1)*100:.1f}%")
             
-            st.
+            st.divider()
+
+            # --- 2. 美股總資產計算 ---
+            total_us_val = 0
+            total_us_cost = 0
+            total_today_pnl = 0
+            total_yest_val = 0
+            
+            for t, info in us_positions.items():
+                p_curr = float(us_data['Close'][t].dropna().iloc[-1])
+                p_yest = float(us_data['Close'][t].dropna().iloc[-2])
+                shares = info['shares']
+                
+                total_us_val += p_curr * shares
+                total_yest_val += p_yest * shares
+                total_us_cost += info['cost'] * shares
+                total_today_pnl += (p_curr - p_yest) * shares
+
+            total_abs_pnl = total_us_val - total_us_cost
+            total_pnl_pct = total_abs_pnl / total_us_cost if total_us_cost > 0 else 0
+            total_today_pct = total_today_pnl / total_yest_val if total_yest_val > 0 else 0
+
+            st.subheader("📋 美股總資產與損益")
+            cu1, cu2 = st.columns(2)
+            cu1.metric("總市值 (USD)", f"${total_us_val:,.2f}")
+            cu2.metric("總投入成本 (USD)", f"${total_us_cost:,.2f}")
+            
+            cu3, cu4 = st.columns(2)
+            cu3.metric("未實現總損益", f"${total_abs_pnl:,.2f}", f"{total_pnl_pct*100:+.2f}%")
+            cu4.metric("今日總損益", f"${total_today_pnl:,.2f}", f"{total_today_pct*100:+.2f}%")
+
+            st.divider()
+
+            # --- 3. 個股詳細 8 宮格 ---
+            st.subheader("📦 個股詳細庫存明細")
+            for t, info in us_positions.items():
+                p_curr = float(us_data['Close'][t].dropna().iloc[-1])
+                p_yest = float(us_data['Close'][t].dropna().iloc[-2])
+                shares = info['shares']
+                avg_cost = info['cost']
+                
+                cur_val = p_curr * shares
+                tot_cost = avg_cost * shares
+                abs_pnl = cur_val - tot_cost
+                pnl_pct = abs_pnl / tot_cost if tot_cost > 0 else 0
+                today_pnl = (p_curr - p_yest) * shares
+                today_drop = (p_curr - p_yest) / p_yest
+                
+                # 使用 Expander 讓畫面乾淨，預設 SOXL 和 TMF 展開
+                with st.expander(f"📌 {t} 庫存明細 (市值: ${cur_val:,.0f})", expanded=(t in ["SOXL", "TMF"])):
+                    c_a, c_b = st.columns(2)
+                    c_a.metric("總市值", f"${cur_val:,.2f}")
+                    c_b.metric("投入成本", f"${tot_cost:,.2f}")
+                    
+                    c_c, c_d = st.columns(2)
+                    c_c.metric("未實現損益", f"${abs_pnl:,.2f}", f"{pnl_pct*100:+.2f}%")
+                    c_d.metric("今日損益", f"${today_pnl:,.2f}", f"{today_drop*100:+.2f}%")
+                    
+                    c_e, c_f = st.columns(2)
+                    c_e.metric("庫存總股數", f"{shares:,.0f} 股")
+                    c_f.metric("持有均價", f"${avg_cost:.2f}")
+                    
+                    c_g, c_h = st.columns(2)
+                    c_g.metric("今日現價", f"${p_curr:.2f}")
+                    c_h.metric("昨日收盤", f"${p_yest:.2f}")
+
+st.caption("📱 提示：將此網頁「加入主畫面」，它就是你的專屬實戰 App！")
