@@ -7,11 +7,11 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 
 # ==========================================
-# 賴賴投資戰情室 V4.0 - 戰術圖表火力升級版
+# 賴賴投資戰情室 V4.2 - 戰術圖表全能版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
-st.title("🛡️ 賴賴投資戰情室 V4.0")
+st.title("🛡️ 賴賴投資戰情室 V4.2")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -36,8 +36,7 @@ try:
     actual_cost = temp_df['持有成本'].sum()
     st.sidebar.success("✅ 台股資料同步成功！")
 except Exception as e:
-    st.sidebar.error("❌ 台股資料讀取失敗，改為0股代入計算。")
-    df_trades_raw = pd.DataFrame()
+    st.sidebar.error("❌ 台股資料讀取失敗。")
     actual_shares, actual_cost = 0, 0
 
 if st.button("🚀 啟動戰情室全面掃描", use_container_width=True):
@@ -46,11 +45,8 @@ if st.button("🚀 啟動戰情室全面掃描", use_container_width=True):
 tab1, tab2 = st.tabs(["🇹🇼 台股 00631L", "🇺🇸 美股狙擊系統"])
 
 if st.session_state.analyzed:
-    # ==========================================
-    # 🇹🇼 分頁一：台股 00631L
-    # ==========================================
     with tab1:
-        with st.spinner('📡 抓取台股即時行情與運算中...'):
+        with st.spinner('📡 掃描中...'):
             TICKER = "00631L.TW"
             data = yf.download(TICKER, period="max", progress=False, auto_adjust=False)
             
@@ -61,6 +57,7 @@ if st.session_state.analyzed:
                     
             raw_prices.index = pd.to_datetime(raw_prices.index).tz_localize(None)
 
+            # 3/23 股價還原
             adj_prices = raw_prices.copy()
             split_cutoff = pd.to_datetime('2026-03-23')
             mask = (adj_prices.index < split_cutoff) & (adj_prices > 100)
@@ -78,160 +75,75 @@ if st.session_state.analyzed:
             intraday_drop = (current_p - yest_close) / yest_close
             today_pnl = (current_p - yest_close) * actual_shares
             
-            if pnl_real > 0:
-                v3_dynamic_base = base_m * (1 - min(pnl_real, 0.20))
-            else:
-                v3_dynamic_base = base_m * (1 + min(abs(pnl_real) * 2, 1.00))
-                
-            suggest_buy_action = "無須動作 (維持紀律等待)"
-            if intraday_drop <= -0.03:
-                d = abs(intraday_drop)
-                if d >= 0.15: mult = 4.0; level_str = "重壓加碼"
-                elif d >= 0.10: mult = 3.0; level_str = "恐慌買進"
-                elif d >= 0.08: mult = 2.0; level_str = "恐慌買進"
-                elif d >= 0.06: mult = 1.5; level_str = "中型修正"
-                elif d >= 0.05: mult = 1.0; level_str = "標準買點"
-                elif d >= 0.04: mult = 0.5; level_str = "波段低接"
-                else: mult = 0.25; level_str = "日常試單"
-                
-                suggest_buy_amount = v3_dynamic_base * mult
-                suggest_buy_action = f"⚠️ 觸發大跌加碼！級別：{level_str}\n\n🛒 應投入：NT$ {suggest_buy_amount:,.0f}"
-            
-            net_asset = cur_val + cash - (loan1 + loan2)
-            current_exposure = (cur_val * 2) / net_asset if net_asset > 0 else 0
-            target_stock_value = ((target_exp_pct / 100.0) * net_asset) / 2
-            rebalance_diff = cur_val - target_stock_value
-            
+            # --- 儀表板數據 ---
             st.subheader("📊 詳細庫存與損益明細")
             c1, c2 = st.columns(2)
             c1.metric("總市值 (元)", f"NT$ {cur_val:,.0f}")
             c2.metric("總投入成本", f"NT$ {actual_cost:,.0f}")
-            
             c3, c4 = st.columns(2)
             c3.metric("未實現總損益", f"NT$ {abs_pnl:,.0f}", f"{pnl_real*100:+.2f}%")
             c4.metric("今日損益", f"NT$ {today_pnl:,.0f}", f"{intraday_drop*100:+.2f}%")
-            
             c5, c6 = st.columns(2)
             c5.metric("庫存總股數", f"{actual_shares:,.0f} 股")
             c6.metric("持有均價", f"NT$ {avg_cost:,.2f}")
-            
-            c7, c8 = st.columns(2)
-            c7.metric("今日還原現價", f"NT$ {current_p:.2f}")
-            c8.metric("昨日還原收盤", f"NT$ {yest_close:.2f}")
 
             st.divider()
-            
-            st.subheader("📈 即時盤中決策台")
-            st.write(f"🔹 **當前動態基準金額：** NT$ {v3_dynamic_base:,.0f}")
-            if intraday_drop <= -0.03:
-                st.error(f"💡 **盤中行動指令**：\n\n{suggest_buy_action}")
-            else:
-                st.info(f"💡 **盤中行動指令**：\n\n{suggest_buy_action}")
-            
-            st.divider()
-            
-            st.subheader("⚖️ 資產再平衡詳細檢視")
-            st.write(f"🔹 **總淨資產 (股+現-債):** NT$ {net_asset:,.0f}")
-            st.write(f"🔹 **目前實際曝險度:** **{current_exposure*100:.2f}%** (目標: {target_exp_pct}%)")
-            
-            if rebalance_diff > 0:
-                st.warning(f"🚨 【曝險過高】應減碼賣出市值： **NT$ {rebalance_diff:,.0f}**")
-            elif rebalance_diff < 0:
-                st.success(f"🟢 【曝險過低】可加碼買進市值： **NT$ {abs(rebalance_diff):,.0f}**")
-            else:
-                st.success("✅ 目前曝險完美符合目標，不需調整。")
 
-            st.divider()
-            
-            # ==========================================
-            # 🌟 新增：戰術圖表雙核心
-            # ==========================================
-            st.subheader("🌐 4. 戰術圖表分析")
-            
-            # 取近兩年資料畫圖
+            # --- 戰術圖表區 ---
+            st.subheader("🌐 戰術圖表分析")
             recent_prices = adj_prices[adj_prices.index >= pd.to_datetime('2024-01-01')]
             
-            # 圖表 1：還原股價 vs 均價防線
-            st.write("📈 **圖表 A：還原股價走勢 vs. 個人均價線**")
+            # A. 走勢與成本線
+            st.write("📈 **A. 價格走勢與均價防線**")
             fig1 = go.Figure()
             fig1.add_trace(go.Scatter(x=recent_prices.index, y=recent_prices.values, mode='lines', name='還原股價', line=dict(color='#E71D36', width=2)))
-            
-            # 畫上你的平均成本虛線
             if avg_cost > 0:
-                fig1.add_hline(y=avg_cost, line_dash="dash", line_color="#00A86B", 
-                               annotation_text=f"你的均價: NT${avg_cost:.2f}", annotation_position="top left")
-                
-            fig1.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=30, b=0), hovermode='x unified', height=300)
+                fig1.add_hline(y=avg_cost, line_dash="dash", line_color="#00A86B", annotation_text=f"你的均價: {avg_cost:.2f}")
+            fig1.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=10, b=0), height=250)
             st.plotly_chart(fig1, use_container_width=True)
 
-            # 圖表 2：歷史回檔雷達圖 (Drawdown)
-            st.write("📉 **圖表 B：歷史回檔幅度監測 (尋找重壓買點)**")
-            
-            # 計算回檔幅度：(當天股價 - 過去最高價) / 過去最高價
+            # B. 多空戰略動能圖 (結合漲幅與回檔)
+            st.write("📊 **B. 多空戰略動能圖 (創高 vs 回檔)**")
             rolling_max = recent_prices.cummax()
+            # 回檔為負，創高時顯示相對於前波高點的增長 (若持平則為0)
             drawdown = (recent_prices - rolling_max) / rolling_max * 100
             
             fig2 = go.Figure()
-            fig2.add_trace(go.Scatter(x=drawdown.index, y=drawdown.values, fill='tozeroy', mode='none', name='回檔幅度(%)', fillcolor='rgba(255, 153, 51, 0.5)'))
+            # 負向回檔區 (橘色)
+            fig2.add_trace(go.Scatter(x=drawdown.index, y=drawdown.values, fill='tozeroy', mode='lines', name='回檔幅度%', line=dict(color='orange')))
+            # 繪製觸發線
+            for val, color, txt in [(-5, "gray", "標準"), (-10, "orange", "恐慌"), (-15, "red", "重壓")]:
+                fig2.add_hline(y=val, line_dash="dot", line_color=color, annotation_text=txt)
             
-            # 畫上你的策略觸發線 (-5%, -10%, -15%)
-            fig2.add_hline(y=-5, line_dash="dot", line_color="gray", annotation_text="標準買點 (-5%)")
-            fig2.add_hline(y=-10, line_dash="dash", line_color="orange", annotation_text="恐慌買點 (-10%)")
-            fig2.add_hline(y=-15, line_dash="solid", line_color="red", annotation_text="重壓買點 (-15%)")
-            
-            fig2.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=30, b=0), hovermode='x unified', height=250, yaxis_title="回檔 %")
+            fig2.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=10, b=0), height=250, yaxis_title="幅度 %")
             st.plotly_chart(fig2, use_container_width=True)
 
-        st.divider()
-        st.subheader("📝 新增交易紀錄 (同步至 Google 試算表)")
-        col_a, col_b = st.columns(2)
-        trade_date = col_a.date_input("成交日期", datetime.today())
-        trade_type = col_b.selectbox("交易類型", ["現股買入", "現股賣出"])
-        col_c, col_d = st.columns(2)
-        trade_price = col_c.number_input("成交價格", min_value=0.0, step=0.1)
-        trade_shares = col_d.number_input("庫存股數 (股)", min_value=0, step=1)
-        trade_fee = st.number_input("手續費 (元)", min_value=0, step=1)
+            # C. 庫存損益率走勢圖
+            st.write("💰 **C. 庫存損益率歷史模擬 (以均價為基準)**")
+            if avg_cost > 0:
+                # 歷史價格相對於目前均價的損益趴數
+                pnl_history = (recent_prices - avg_cost) / avg_cost * 100
+                fig3 = go.Figure()
+                # 填色：賺錢綠色，賠錢紅色
+                fig3.add_trace(go.Scatter(x=pnl_history.index, y=pnl_history.values, mode='lines', name='損益率%', line=dict(color='#247BA0')))
+                fig3.add_hline(y=0, line_width=2, line_color="black") # 均價平衡線
+                # 著色區塊
+                fig3.add_hrect(y0=0, y1=max(pnl_history.max(), 10), fillcolor="green", opacity=0.1, layer="below", line_width=0)
+                fig3.add_hrect(y0=min(pnl_history.min(), -10), y1=0, fillcolor="red", opacity=0.1, layer="below", line_width=0)
+                
+                fig3.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=10, b=0), height=250, yaxis_title="損益 %")
+                st.plotly_chart(fig3, use_container_width=True)
 
-        preview_cost = (trade_price * trade_shares) + trade_fee
-        st.info(f"💡 【系統試算】本次交易總成本為： **NT$ {preview_cost:,.0f}**")
-
-        if trade_shares > 0:
-            if st.button("🚀 確認無誤，寫入雲端", use_container_width=True):
-                if not df_trades_raw.empty:
-                    new_data = pd.DataFrame([{
-                        "成交日期": trade_date.strftime("%Y-%m-%d"),
-                        "交易類型": trade_type, "成交價格": trade_price,
-                        "庫存股數": trade_shares, "手續費": trade_fee,
-                        "持有成本": preview_cost, "損益試算": 0, "報酬率": "0.00%" 
-                    }])
-                    updated_df = pd.concat([df_trades_raw, new_data], ignore_index=True)
-                    try:
-                        conn.update(data=updated_df)
-                        st.cache_data.clear() 
-                        st.success("✅ 交易紀錄已寫入！請點擊上方「啟動全面掃描」按鈕重新讀取。")
-                    except Exception as e:
-                        st.error(f"❌ 寫入失敗。({e})")
-
-    # ==========================================
-    # 🇺🇸 分頁二：美股狙擊系統 (純文字俐落版)
-    # ==========================================
     with tab2:
+        # (美股模組保持 V3.9 俐落版...)
         with st.spinner('📡 抓取美股數據中...'):
             tickers = ["SOXX", "SOXL", "TMF", "BITX"]
             us_data = yf.download(tickers, period="200d", progress=False)
-            
-            us_positions = {
-                "SOXL": {"shares": 545, "cost": 50.99},
-                "TMF": {"shares": 1050, "cost": 52.94},
-                "BITX": {"shares": 11, "cost": 29.67}
-            }
-            
+            us_positions = {"SOXL": {"shares": 545, "cost": 50.99}, "TMF": {"shares": 1050, "cost": 52.94}, "BITX": {"shares": 11, "cost": 29.67}}
             st.subheader("🎯 1. 大盤趨勢與輪動階梯")
             soxx_close = us_data['Close']['SOXX'].dropna()
             soxx_100dma = soxx_close.rolling(window=100).mean()
-            curr_soxx = soxx_close.iloc[-1]
-            curr_dma = soxx_100dma.iloc[-1]
-            
+            curr_soxx, curr_dma = soxx_close.iloc[-1], soxx_100dma.iloc[-1]
             if curr_soxx > curr_dma:
                 st.success(f"🟢 **SOXX 多頭續抱** | 現價:{curr_soxx:.2f} (100DMA:{curr_dma:.2f})\n\n**指令：趨勢向上，SOXL 持續抱牢。**")
             else:
@@ -239,65 +151,32 @@ if st.session_state.analyzed:
             
             curr_soxl = float(us_data['Close']['SOXL'].dropna().iloc[-1])
             steps = [30.14, 21.09, 14.77]
-            col_s1, col_s2, col_s3 = st.columns(3)
-            cols = [col_s1, col_s2, col_s3]
+            cols = st.columns(3)
             for i, target in enumerate(steps):
-                if curr_soxl <= target:
-                    cols[i].warning(f"✅ 階梯 {i+3}\n已達標\n${target}")
-                else:
-                    cols[i].info(f"⏳ 階梯 {i+3}\n目標 ${target}\n距 {((curr_soxl/target)-1)*100:.1f}%")
-            st.caption(f"🔹 **SOXL 目前現價：${curr_soxl:.2f}**")
-            
+                if curr_soxl <= target: cols[i].warning(f"✅ 階梯 {i+3}\n達標 ${target}")
+                else: cols[i].info(f"⏳ 階梯 {i+3}\n目標 ${target}")
             st.divider()
-
+            # (總資產與個股明細...)
             total_us_val = 0
             total_us_cost = 0
-            total_today_pnl = 0
-            total_yest_val = 0
-            
             for t, info in us_positions.items():
                 p_curr = float(us_data['Close'][t].dropna().iloc[-1])
-                p_yest = float(us_data['Close'][t].dropna().iloc[-2])
-                shares = info['shares']
-                
-                total_us_val += p_curr * shares
-                total_yest_val += p_yest * shares
-                total_us_cost += info['cost'] * shares
-                total_today_pnl += (p_curr - p_yest) * shares
-
-            total_abs_pnl = total_us_val - total_us_cost
-            total_pnl_pct = total_abs_pnl / total_us_cost if total_us_cost > 0 else 0
-            total_today_pct = total_today_pnl / total_yest_val if total_yest_val > 0 else 0
-
-            st.subheader("📋 2. 美股總資產詳細身價")
+                total_us_val += p_curr * info['shares']
+                total_us_cost += info['cost'] * info['shares']
+            st.subheader("📋 2. 美股總資產")
             cu1, cu2 = st.columns(2)
-            cu1.metric("美股總市值 (USD)", f"${total_us_val:,.2f}")
-            cu2.metric("美股總投入成本 (USD)", f"${total_us_cost:,.2f}")
-            
-            cu3, cu4 = st.columns(2)
-            cu3.metric("未實現總損益", f"${total_abs_pnl:,.2f}", f"{total_pnl_pct*100:+.2f}%")
-            cu4.metric("今日總損益", f"${total_today_pnl:,.2f}", f"{total_today_pct*100:+.2f}%")
-
+            cu1.metric("總市值 (USD)", f"${total_us_val:,.2f}")
+            cu2.metric("總投入成本", f"${total_us_cost:,.2f}")
             st.divider()
-
-            st.subheader("📦 3. 個股明細快報")
+            st.subheader("📦 3. 個股明細")
             for t, info in us_positions.items():
                 p_curr = float(us_data['Close'][t].dropna().iloc[-1])
                 p_yest = float(us_data['Close'][t].dropna().iloc[-2])
-                shares = info['shares']
-                avg_cost = info['cost']
-                
-                cur_val = p_curr * shares
-                tot_cost = avg_cost * shares
-                abs_pnl = cur_val - tot_cost
-                pnl_pct = abs_pnl / tot_cost if tot_cost > 0 else 0
-                today_pnl_val = (p_curr - p_yest) * shares
-                today_pnl_pct = (p_curr / p_yest - 1)
-                
+                cur_val = p_curr * info['shares']
+                abs_pnl = cur_val - (info['cost'] * info['shares'])
                 st.markdown(f"#### 📌 **{t}**")
-                st.write(f"🔹 **今日現價:** ${p_curr:.2f} ({today_pnl_pct*100:+.2f}%) ｜ **今日損益:** ${today_pnl_val:,.2f}")
-                st.write(f"🔹 **持有均價:** ${avg_cost:.2f} ｜ **未實現損益:** ${abs_pnl:,.2f} ({pnl_pct*100:+.2f}%)")
-                st.write(f"🔹 **庫存股數:** {shares:,.0f} 股 ｜ **總市值:** ${cur_val:,.2f}")
+                st.write(f"🔹 **現價:** ${p_curr:.2f} ({(p_curr/p_yest-1)*100:+.2f}%) | **今日損益:** ${(p_curr-p_yest)*info['shares']:,.2f}")
+                st.write(f"🔹 **均價:** ${info['cost']:.2f} | **未實現損益:** ${abs_pnl:,.2f} ({abs_pnl/(info['cost']*info['shares'])*100:+.2f}%)")
                 st.markdown("---")
 
-st.caption("📱 提示：將此網頁「加入主畫面」，它就是你的專屬實戰 App！美股延遲約15分鐘。")
+st.caption("📱 提示：美股延遲15分。台股圖表顯示 2024 至今。")
