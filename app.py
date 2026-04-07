@@ -7,11 +7,11 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 
 # ==========================================
-# 賴賴投資戰情室 V4.5 - 真實歷史回溯與乖離率版
+# 賴賴投資戰情室 V4.6 - 真實歷史軌跡除錯版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
-st.title("🛡️ 賴賴投資戰情室 V4.5")
+st.title("🛡️ 賴賴投資戰情室 V4.6")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -103,63 +103,55 @@ if st.session_state.analyzed:
             fig1.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=10, b=0), height=250)
             st.plotly_chart(fig1, use_container_width=True)
 
-            # B. 【修正】多空戰略動能圖 (20日乖離率 Bias)
-            st.write("📊 **B. 多空戰略動能圖 (月線乖離率)**")
-            st.caption("正數代表大盤強勢創高，負數代表回檔修正。可觀察橘色區塊尋找買點。")
+            # B. 多空戰略動能圖 (20日乖離率 Bias)
+            st.write("📊 **B. 多空戰略動能圖 (乖離率雙向動能)**")
+            st.caption("突破 0 軸代表強勢上漲，跌破 0 軸代表回檔修正。")
             
-            # 計算 20 日均線與乖離率
             ma20 = recent_prices.rolling(window=20).mean()
             bias = (recent_prices - ma20) / ma20 * 100
             
             fig2 = go.Figure()
-            # 畫出乖離率，填滿 0 軸到線條之間的區域
             fig2.add_trace(go.Scatter(x=bias.index, y=bias.values, fill='tozeroy', mode='lines', name='乖離率%', line=dict(color='#F4A261')))
-            fig2.add_hline(y=0, line_width=1, line_color="black") # 零軸
+            fig2.add_hline(y=0, line_width=1, line_color="black") 
             
-            # 你的戰術加碼線
             for val, color, txt in [(-5, "gray", "標準"), (-10, "orange", "恐慌"), (-15, "red", "重壓")]:
                 fig2.add_hline(y=val, line_dash="dot", line_color=color, annotation_text=txt)
             
             fig2.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=10, b=0), height=250, yaxis_title="乖離率 %")
             st.plotly_chart(fig2, use_container_width=True)
 
-            # C. 【修正】庫存損益率歷史真實軌跡
+            # C. 庫存損益率歷史真實軌跡
             st.write("💰 **C. 庫存損益率歷史真實軌跡**")
             st.caption("依照你的歷史交易紀錄，逐日還原當下的真實損益表現。")
             
             if not temp_df.empty:
-                # 建立真實的每日庫存變化表
                 trade_history = temp_df.copy()
                 trade_history = trade_history.groupby('成交日期')[['庫存股數', '持有成本']].sum().reset_index()
                 trade_history.set_index('成交日期', inplace=True)
                 trade_history.index = pd.to_datetime(trade_history.index).tz_localize(None)
 
-                # 把交易紀錄對齊到所有的交易日 (填補沒交易的日子)
-                daily_history = trade_history.reindex(raw_prices.index).fillna(0)
+                daily_history = trade_history.reindex(adj_prices.index).fillna(0)
                 daily_shares = daily_history['庫存股數'].cumsum()
                 daily_cost = daily_history['持有成本'].cumsum()
 
-                # 計算每日真實市值與真實損益率
-                daily_mv = daily_shares * raw_prices
+                # 🐞 關鍵修復：這裡已經改為乘以「adj_prices (還原股價)」，6000%的蟲已經殺死了！
+                daily_mv = daily_shares * adj_prices
                 daily_pnl_pct = np.where(daily_cost > 0, (daily_mv - daily_cost) / daily_cost * 100, 0)
-                daily_pnl_pct_series = pd.Series(daily_pnl_pct, index=raw_prices.index)
+                daily_pnl_pct_series = pd.Series(daily_pnl_pct, index=adj_prices.index)
 
-                # 截取近兩年畫圖
                 recent_pnl_pct = daily_pnl_pct_series[daily_pnl_pct_series.index >= pd.to_datetime('2024-01-01')]
                 
-                # 防止資料全空的防呆機制
                 max_val = recent_pnl_pct.max() if not recent_pnl_pct.empty and not pd.isna(recent_pnl_pct.max()) else 0
                 min_val = recent_pnl_pct.min() if not recent_pnl_pct.empty and not pd.isna(recent_pnl_pct.min()) else 0
 
                 fig3 = go.Figure()
                 fig3.add_trace(go.Scatter(x=recent_pnl_pct.index, y=recent_pnl_pct.values, mode='lines', name='真實損益率%', line=dict(color='#247BA0')))
-                fig3.add_hline(y=0, line_width=2, line_color="black") # 損益兩平線
+                fig3.add_hline(y=0, line_width=2, line_color="black") 
                 
-                # 著色區塊 (正報酬綠色，負報酬紅色)
                 fig3.add_hrect(y0=0, y1=max(max_val, 10)+5, fillcolor="green", opacity=0.1, layer="below", line_width=0)
                 fig3.add_hrect(y0=min(min_val, -10)-5, y1=0, fillcolor="red", opacity=0.1, layer="below", line_width=0)
                 
-                fig3.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=10, b=0), height=250, yaxis_title="損益 %")
+                fig3.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=10, b=0), height=250, yaxis_title="真實損益 %")
                 st.plotly_chart(fig3, use_container_width=True)
             else:
                 st.info("尚無足夠的歷史交易紀錄，無法繪製真實損益軌跡。")
