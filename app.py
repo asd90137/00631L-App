@@ -7,17 +7,15 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 
 # ==========================================
-# 賴賴投資戰情室 V3.9 - 美股純淨明細版 (修正語意)
+# 賴賴投資戰情室 V4.0 - 戰術圖表火力升級版
 # ==========================================
 
-# 1. 設定 App 頁面
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
-st.title("🛡️ 賴賴投資戰情室 V3.9")
+st.title("🛡️ 賴賴投資戰情室 V4.0")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
 
-# 2. 側邊欄參數設定 
 st.sidebar.header("⚙️ 台股參數")
 loan1 = st.sidebar.number_input("1. 信貸一剩餘本金", value=2056231)
 loan2 = st.sidebar.number_input("2. 信貸二剩餘本金", value=935907)
@@ -25,7 +23,6 @@ base_m = st.sidebar.number_input("3. 基準每月定期定額", value=100000)
 cash = st.sidebar.number_input("4. 目前帳戶可用現金", value=2000000)
 target_exp_pct = st.sidebar.number_input("5. 設定目標曝險度 (%)", value=200)
 
-# 3. 雲端資料庫連動 
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
     df_trades_raw = conn.read(ttl=0) 
@@ -43,11 +40,9 @@ except Exception as e:
     df_trades_raw = pd.DataFrame()
     actual_shares, actual_cost = 0, 0
 
-# 4. 全局運算按鈕
 if st.button("🚀 啟動戰情室全面掃描", use_container_width=True):
     st.session_state.analyzed = True
 
-# 分頁標籤
 tab1, tab2 = st.tabs(["🇹🇼 台股 00631L", "🇺🇸 美股狙擊系統"])
 
 if st.session_state.analyzed:
@@ -128,7 +123,6 @@ if st.session_state.analyzed:
             
             st.subheader("📈 即時盤中決策台")
             st.write(f"🔹 **當前動態基準金額：** NT$ {v3_dynamic_base:,.0f}")
-            
             if intraday_drop <= -0.03:
                 st.error(f"💡 **盤中行動指令**：\n\n{suggest_buy_action}")
             else:
@@ -149,12 +143,44 @@ if st.session_state.analyzed:
 
             st.divider()
             
-            st.subheader("🌐 00631L 歷史還原走勢圖")
-            fig = go.Figure()
+            # ==========================================
+            # 🌟 新增：戰術圖表雙核心
+            # ==========================================
+            st.subheader("🌐 4. 戰術圖表分析")
+            
+            # 取近兩年資料畫圖
             recent_prices = adj_prices[adj_prices.index >= pd.to_datetime('2024-01-01')]
-            fig.add_trace(go.Scatter(x=recent_prices.index, y=recent_prices.values, mode='lines', name='還原股價', line=dict(color='#E71D36', width=2)))
-            fig.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=30, b=0), hovermode='x unified', height=300)
-            st.plotly_chart(fig, use_container_width=True)
+            
+            # 圖表 1：還原股價 vs 均價防線
+            st.write("📈 **圖表 A：還原股價走勢 vs. 個人均價線**")
+            fig1 = go.Figure()
+            fig1.add_trace(go.Scatter(x=recent_prices.index, y=recent_prices.values, mode='lines', name='還原股價', line=dict(color='#E71D36', width=2)))
+            
+            # 畫上你的平均成本虛線
+            if avg_cost > 0:
+                fig1.add_hline(y=avg_cost, line_dash="dash", line_color="#00A86B", 
+                               annotation_text=f"你的均價: NT${avg_cost:.2f}", annotation_position="top left")
+                
+            fig1.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=30, b=0), hovermode='x unified', height=300)
+            st.plotly_chart(fig1, use_container_width=True)
+
+            # 圖表 2：歷史回檔雷達圖 (Drawdown)
+            st.write("📉 **圖表 B：歷史回檔幅度監測 (尋找重壓買點)**")
+            
+            # 計算回檔幅度：(當天股價 - 過去最高價) / 過去最高價
+            rolling_max = recent_prices.cummax()
+            drawdown = (recent_prices - rolling_max) / rolling_max * 100
+            
+            fig2 = go.Figure()
+            fig2.add_trace(go.Scatter(x=drawdown.index, y=drawdown.values, fill='tozeroy', mode='none', name='回檔幅度(%)', fillcolor='rgba(255, 153, 51, 0.5)'))
+            
+            # 畫上你的策略觸發線 (-5%, -10%, -15%)
+            fig2.add_hline(y=-5, line_dash="dot", line_color="gray", annotation_text="標準買點 (-5%)")
+            fig2.add_hline(y=-10, line_dash="dash", line_color="orange", annotation_text="恐慌買點 (-10%)")
+            fig2.add_hline(y=-15, line_dash="solid", line_color="red", annotation_text="重壓買點 (-15%)")
+            
+            fig2.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=30, b=0), hovermode='x unified', height=250, yaxis_title="回檔 %")
+            st.plotly_chart(fig2, use_container_width=True)
 
         st.divider()
         st.subheader("📝 新增交易紀錄 (同步至 Google 試算表)")
@@ -206,7 +232,6 @@ if st.session_state.analyzed:
             curr_soxx = soxx_close.iloc[-1]
             curr_dma = soxx_100dma.iloc[-1]
             
-            # 💡 修正這裡的語意錯誤！
             if curr_soxx > curr_dma:
                 st.success(f"🟢 **SOXX 多頭續抱** | 現價:{curr_soxx:.2f} (100DMA:{curr_dma:.2f})\n\n**指令：趨勢向上，SOXL 持續抱牢。**")
             else:
