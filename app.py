@@ -7,11 +7,11 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 
 # ==========================================
-# 賴賴投資戰情室 V4.6 - 真實歷史軌跡除錯版
+# 賴賴投資戰情室 V4.7 - 均線安全距離版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
-st.title("🛡️ 賴賴投資戰情室 V4.6")
+st.title("🛡️ 賴賴投資戰情室 V4.7")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -134,7 +134,6 @@ if st.session_state.analyzed:
                 daily_shares = daily_history['庫存股數'].cumsum()
                 daily_cost = daily_history['持有成本'].cumsum()
 
-                # 🐞 關鍵修復：這裡已經改為乘以「adj_prices (還原股價)」，6000%的蟲已經殺死了！
                 daily_mv = daily_shares * adj_prices
                 daily_pnl_pct = np.where(daily_cost > 0, (daily_mv - daily_cost) / daily_cost * 100, 0)
                 daily_pnl_pct_series = pd.Series(daily_pnl_pct, index=adj_prices.index)
@@ -206,10 +205,14 @@ if st.session_state.analyzed:
             curr_soxx = soxx_close.iloc[-1]
             curr_dma = soxx_100dma.iloc[-1]
             
+            # 💡 新增：計算價差與百分比
+            soxx_diff = curr_soxx - curr_dma
+            soxx_diff_pct = (curr_soxx / curr_dma - 1) * 100
+            
             if curr_soxx > curr_dma:
-                st.success(f"🟢 **SOXX 多頭續抱** | 現價:{curr_soxx:.2f} (100DMA:{curr_dma:.2f})\n\n**指令：趨勢向上，SOXL 持續抱牢。**")
+                st.success(f"🟢 **SOXX 多頭續抱** | 現價:{curr_soxx:.2f} (100DMA:{curr_dma:.2f} | 差距: +{soxx_diff:.2f} / +{soxx_diff_pct:.2f}%)\n\n**指令：趨勢向上，SOXL 持續抱牢。**")
             else:
-                st.error(f"🔴 **停利訊號觸發！** | 現價跌破 100DMA ({curr_dma:.2f})\n\n**指令：全數賣出 SOXL 轉入 TLT。**")
+                st.error(f"🔴 **停利訊號觸發！** | 現價:{curr_soxx:.2f} 跌破 100DMA ({curr_dma:.2f} | 差距: {soxx_diff:.2f} / {soxx_diff_pct:.2f}%)\n\n**指令：全數賣出 SOXL 轉入 TLT。**")
             
             curr_soxl = float(us_data['Close']['SOXL'].dropna().iloc[-1])
             steps = [30.14, 21.09, 14.77]
