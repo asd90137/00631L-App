@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V4.9 - 報價精準定位版 (附逐筆明細)
+# 賴賴投資戰情室 V4.9 - 報價精準定位版 (明細美化升級)
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
@@ -65,7 +65,7 @@ if st.session_state.analyzed:
             if mask.any():
                 adj_prices.loc[mask] = round(adj_prices.loc[mask] / 22.0, 2)
                 
-            # 🚀 V4.9 精準即時報價核心
+            # V4.9 精準即時報價核心
             tkr = yf.Ticker(TICKER)
             try:
                 raw_curr = float(tkr.fast_info.last_price)
@@ -115,15 +115,17 @@ if st.session_state.analyzed:
             st.divider()
 
             # ==========================================
-            # 🌟 新增：逐筆投資明細表 (摺疊欄位)
+            # 📜 逐筆投資明細表 (最新日期置頂 + 美化版)
             # ==========================================
-            st.subheader("📜 逐筆投資明細表")
-            with st.expander("點擊展開/收合：查看每一筆買入紀錄的詳細績效", expanded=False):
+            st.subheader("📜 逐筆投資戰績表")
+            with st.expander("點擊展開：檢視每筆子彈的獨立作戰績效", expanded=False):
                 if not df_trades_raw.empty:
-                    # 只抓出「買入」的紀錄來算績效
                     buy_df = df_trades_raw[df_trades_raw['交易類型'].str.contains('買入', na=False)].copy()
                     if not buy_df.empty:
                         buy_df['成交日期'] = pd.to_datetime(buy_df['成交日期'])
+                        
+                        # 💡 排序魔法：讓最新的日期排在最上面
+                        buy_df = buy_df.sort_values(by='成交日期', ascending=False)
                         today_date = pd.to_datetime(datetime.today().date())
                         
                         records = []
@@ -142,28 +144,29 @@ if st.session_state.analyzed:
                                 adj_s = r_shares
                             
                             # 績效計算
-                            p_change = (current_p - adj_p) / adj_p if adj_p > 0 else 0
                             lot_cur_val = adj_s * current_p
                             lot_pnl = lot_cur_val - t_cost
                             lot_roi = lot_pnl / t_cost if t_cost > 0 else 0
                             
-                            # 年化計算 (持有天數防呆，最少1天避免分母為0)
+                            # 💡 新增：該筆子彈的「今日損益金額」
+                            lot_today_pnl = (current_p - yest_close) * adj_s
+                            
+                            # 年化計算 (保留你的原汁原味，不加 30 天防呆)
                             days_held = max((today_date - trade_d).days, 1)
                             ann_roi = (1 + lot_roi) ** (365.0 / days_held) - 1
                             
+                            # 加入 emoji 視覺優化欄位
                             records.append({
-                                '日期': trade_d.strftime('%Y-%m-%d'),
-                                '買價(還原)': f"{adj_p:.2f}",
-                                '數量(還原)': f"{adj_s:,.0f}",
-                                '總成本': f"{t_cost:,.0f}",
-                                '現價': f"{current_p:.2f}",
-                                '漲跌幅': f"{p_change*100:+.2f}%",
-                                '未實現損益': f"{lot_pnl:+,.0f}",
-                                '報酬率': f"{lot_roi*100:+.2f}%",
-                                '年化報酬': f"{ann_roi*100:+.2f}%"
+                                '📅 日期': trade_d.strftime('%Y-%m-%d'),
+                                '🛒 買價': f"{adj_p:.2f}",
+                                '📦 股數': f"{adj_s:,.0f}",
+                                '💰 總成本': f"{t_cost:,.0f}",
+                                '🔥 今日損益': f"{lot_today_pnl:+,.0f}",
+                                '📈 總損益': f"{lot_pnl:+,.0f}",
+                                '🎯 總報酬': f"{lot_roi*100:+.2f}%",
+                                '🚀 年化報酬': f"{ann_roi*100:+.2f}%"
                             })
                         
-                        # 顯示表格 (無索引，自動展開)
                         st.dataframe(pd.DataFrame(records), use_container_width=True, hide_index=True)
                     else:
                         st.write("目前尚無買入紀錄。")
@@ -398,4 +401,4 @@ if st.session_state.analyzed:
                 st.write(f"🔹 **庫存股數:** {shares:,.0f} 股 ｜ **總市值:** ${cur_val:,.2f}")
                 st.markdown("---")
 
-st.caption("📱 提示：將此網頁「加入主畫面」，它就是你的專屬實戰 App！台股盤中為證交所直連零延遲。")
+st.caption("📱 提示：將此網頁「加入主畫面」，它就是你的專屬實戰 App！")
