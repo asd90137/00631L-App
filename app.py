@@ -7,11 +7,11 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 
 # ==========================================
-# 賴賴投資戰情室 V4.7 - 均線安全距離版
+# 賴賴投資戰情室 V4.8 - 八宮格完美修復版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
-st.title("🛡️ 賴賴投資戰情室 V4.7")
+st.title("🛡️ 賴賴投資戰情室 V4.8")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -76,17 +76,48 @@ if st.session_state.analyzed:
             intraday_drop = (current_p - yest_close) / yest_close
             today_pnl = (current_p - yest_close) * actual_shares
             
-            # --- 儀表板數據 ---
+            if pnl_real > 0:
+                v3_dynamic_base = base_m * (1 - min(pnl_real, 0.20))
+            else:
+                v3_dynamic_base = base_m * (1 + min(abs(pnl_real) * 2, 1.00))
+                
+            suggest_buy_action = "無須動作 (維持紀律等待)"
+            if intraday_drop <= -0.03:
+                d = abs(intraday_drop)
+                if d >= 0.15: mult = 4.0; level_str = "重壓加碼"
+                elif d >= 0.10: mult = 3.0; level_str = "恐慌買進"
+                elif d >= 0.08: mult = 2.0; level_str = "恐慌買進"
+                elif d >= 0.06: mult = 1.5; level_str = "中型修正"
+                elif d >= 0.05: mult = 1.0; level_str = "標準買點"
+                elif d >= 0.04: mult = 0.5; level_str = "波段低接"
+                else: mult = 0.25; level_str = "日常試單"
+                
+                suggest_buy_amount = v3_dynamic_base * mult
+                suggest_buy_action = f"⚠️ 觸發大跌加碼！級別：{level_str}\n\n🛒 應投入：NT$ {suggest_buy_amount:,.0f}"
+            
+            net_asset = cur_val + cash - (loan1 + loan2)
+            current_exposure = (cur_val * 2) / net_asset if net_asset > 0 else 0
+            target_stock_value = ((target_exp_pct / 100.0) * net_asset) / 2
+            rebalance_diff = cur_val - target_stock_value
+            
+            # --- 儀表板數據 (補回第八宮格) ---
             st.subheader("📊 詳細庫存與損益明細")
             c1, c2 = st.columns(2)
             c1.metric("總市值 (元)", f"NT$ {cur_val:,.0f}")
             c2.metric("總投入成本", f"NT$ {actual_cost:,.0f}")
+            
             c3, c4 = st.columns(2)
             c3.metric("未實現總損益", f"NT$ {abs_pnl:,.0f}", f"{pnl_real*100:+.2f}%")
             c4.metric("今日損益", f"NT$ {today_pnl:,.0f}", f"{intraday_drop*100:+.2f}%")
+            
             c5, c6 = st.columns(2)
             c5.metric("庫存總股數", f"{actual_shares:,.0f} 股")
             c6.metric("持有均價", f"NT$ {avg_cost:,.2f}")
+            
+            # 🐞 這裡就是不小心被刪掉的第七、第八宮格！
+            c7, c8 = st.columns(2)
+            c7.metric("今日還原現價", f"NT$ {current_p:.2f}")
+            c8.metric("昨日還原收盤", f"NT$ {yest_close:.2f}")
 
             st.divider()
 
@@ -205,7 +236,6 @@ if st.session_state.analyzed:
             curr_soxx = soxx_close.iloc[-1]
             curr_dma = soxx_100dma.iloc[-1]
             
-            # 💡 新增：計算價差與百分比
             soxx_diff = curr_soxx - curr_dma
             soxx_diff_pct = (curr_soxx / curr_dma - 1) * 100
             
