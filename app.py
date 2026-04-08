@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V4.9 - 報價精準定位版 (曝險公式透視版)
+# 賴賴投資戰情室 V4.9 - 報價精準定位版 (透視公式與降落指南版)
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
@@ -207,19 +207,6 @@ if st.session_state.analyzed:
                 st.error(f"💡 **盤中行動指令**：\n\n{suggest_buy_action}")
             else:
                 st.info(f"💡 **盤中行動指令**：\n\n{suggest_buy_action}")
-            
-            st.divider()
-            
-            st.subheader("⚖️ 資產再平衡詳細檢視")
-            st.write(f"🔹 **總淨資產 (股+現-債):** NT$ {net_asset:,.0f}")
-            st.write(f"🔹 **目前實際曝險度:** **{current_exposure*100:.2f}%** (目標: {target_exp_pct}%)")
-            
-            if rebalance_diff > 0:
-                st.warning(f"🚨 【曝險過高】應減碼賣出市值： **NT$ {rebalance_diff:,.0f}**")
-            elif rebalance_diff < 0:
-                st.success(f"🟢 【曝險過低】可加碼買進市值： **NT$ {abs(rebalance_diff):,.0f}**")
-            else:
-                st.success("✅ 目前曝險完美符合目標，不需調整。")
 
             st.divider()
 
@@ -437,24 +424,28 @@ if st.session_state.analyzed:
         st.subheader("🛬 生命週期投資法 (Lifecycle Investing)")
         st.write("系統已自動抓取你當前的台美股真實市值、現金與信貸，為你推演未來的最佳化降落軌跡。")
         
-        # 1. 數值運算
-        FC = cur_val + total_us_val_twd + cash - (loan1 + loan2)
+        # 1. 算出大分母 (總淨資產 FC)
+        FC_TW = cur_val + cash - (loan1 + loan2) # 台股帳戶實質淨值
+        FC_US = total_us_val_twd # 美股帳戶實質淨值
+        FC = FC_TW + FC_US
+        
         annual_inv = base_m * 12
         HC = annual_inv * hc_years
         W = FC + HC
         target_stock = W * (target_k / 100.0)
         current_E = (target_stock / FC * 100) if FC > 0 else 0
         
-        # 2. 實際曝險度運算
+        # 2. 算出大分子 (實質跳動曝險金額)
         twd_exposure_val = cur_val * 2 # 台股 00631L 是 2倍
-        # 美股股票曝險：SOXL(3倍) + BITX(2倍) * 匯率 (TMF債券不列入股票曝險)
         soxl_val_twd = us_live['SOXL']['curr'] * us_positions['SOXL']['shares'] * usd_twd
         bitx_val_twd = us_live['BITX']['curr'] * us_positions['BITX']['shares'] * usd_twd
-        usd_exposure_val = (soxl_val_twd * 3) + (bitx_val_twd * 2)
+        usd_exposure_val = (soxl_val_twd * 3) + (bitx_val_twd * 2) # TMF 避險債券不列入
+        
         total_exposure_val = twd_exposure_val + usd_exposure_val
         
-        actual_twd_E = (twd_exposure_val / FC * 100) if FC > 0 else 0
-        actual_usd_E = (usd_exposure_val / FC * 100) if FC > 0 else 0
+        # 3. 算出各自的曝險度
+        actual_twd_E = (twd_exposure_val / FC_TW * 100) if FC_TW > 0 else 0
+        actual_usd_E = (usd_exposure_val / FC_US * 100) if FC_US > 0 else 0
         actual_total_E = (total_exposure_val / FC * 100) if FC > 0 else 0
 
         # UI: 當前戰況總結
@@ -469,22 +460,41 @@ if st.session_state.analyzed:
         
         st.divider()
         
-        # 🌟 UI: 實際曝險 vs 應有曝險 (透視公式版)
-        st.markdown("### ⚖️ 2. 實際曝險 vs 應有曝險 (雷達檢視)")
+        # 🌟 UI: 分子分母透視表
+        st.markdown("### ⚖️ 2. 實際曝險 vs 應有曝險 (公式透視)")
         st.markdown(f"""
-        **🔍 實際曝險度計算公式拆解：**
-        * 🏦 **總淨資產 (FC，大分母)：** NT$ {FC:,.0f}
-        * 🇹🇼 **台股實質跳動額 (分子 1)：** NT$ {twd_exposure_val:,.0f} (00631L市值 × 2倍)
-        * 🇺🇸 **美股實質跳動額 (分子 2)：** NT$ {usd_exposure_val:,.0f} (不含避險債券，依槓桿還原)
-        * 🔥 **總實質跳動金額 (大分子)：** NT$ {total_exposure_val:,.0f}
+        | 戰區 | 曝險金額 (大分子) | 淨資產 (大分母) | 實際曝險度 |
+        | :--- | :--- | :--- | :--- |
+        | **🇹🇼 台股** | NT$ {twd_exposure_val:,.0f} | NT$ {FC_TW:,.0f} | **{actual_twd_E:.1f}%** |
+        | **🇺🇸 美股** | NT$ {usd_exposure_val:,.0f} | NT$ {FC_US:,.0f} | **{actual_usd_E:.1f}%** |
+        | **🔥 總計** | **NT$ {total_exposure_val:,.0f}** | **NT$ {FC:,.0f}** | **{actual_total_E:.1f}%** |
         """)
 
-        c_e1, c_e2, c_e3 = st.columns(3)
-        c_e1.metric("🎯 應有總曝險度", f"{current_E:.1f}%", "Lifecycle 目標")
-        c_e2.metric("🔥 實際總曝險度", f"{actual_total_E:.1f}%", f"差距: {actual_total_E - current_E:+.1f}%")
-        c_e3.metric("🇹🇼台股 / 🇺🇸美股 (實質)", f"{actual_twd_E:.0f}% / {actual_usd_E:.0f}%", "各佔 FC 之比例")
+        st.metric("🎯 生命週期目標曝險度", f"{current_E:.1f}%", f"與實際差距: {current_E - actual_total_E:+.1f}%")
+
+        # 🌟 UI: 智能降落/加碼操作指南
+        target_exposure_val_from_lifecycle = FC * (current_E / 100.0)
+        excess_exposure_val = total_exposure_val - target_exposure_val_from_lifecycle
         
-        st.info("💡 如果「實際總曝險度」小於「應有總曝險度」，代表你目前處於完全可以承受高槓桿的安全期，甚至還有加碼空間！")
+        if excess_exposure_val > 0:
+            st.error(f"🚨 **目前【高於】目標曝險度！** (總曝險超標金額：NT$ {excess_exposure_val:,.0f})")
+            st.markdown(f"""
+            **💡 降落操作指南（以下挑選一個你最順手的方案執行即可）：**
+            * 【方案 A】🇹🇼 賣出市值 **NT$ {excess_exposure_val / 2:,.0f}** 的 00631L (2倍)，**轉存為現金**。
+            * 【方案 B】🇹🇼 賣出市值 **NT$ {excess_exposure_val / 1:,.0f}** 的 00631L (2倍)，全數**買入 0050** (1倍)。
+            * 【方案 C】🇺🇸 賣出市值 **NT$ {excess_exposure_val / 3:,.0f}** 的 SOXL (3倍)，**轉存為美金現金**。
+            * 【方案 D】🇺🇸 賣出市值 **NT$ {excess_exposure_val / 2:,.0f}** 的 SOXL (3倍)，全數**買入 VOO/QQQ** (1倍)。
+            """)
+        elif excess_exposure_val < 0:
+            shortfall = abs(excess_exposure_val)
+            st.success(f"🟢 **目前【低於】目標曝險度！** (總曝險尚可增加：NT$ {shortfall:,.0f})")
+            st.markdown(f"""
+            **💡 加碼操作指南（以下挑選一個你最順手的方案執行即可）：**
+            * 【方案 A】🇹🇼 動用現金，買入市值 **NT$ {shortfall / 2:,.0f}** 的 00631L (2倍)。
+            * 【方案 B】🇺🇸 動用現金，買入市值 **NT$ {shortfall / 3:,.0f}** 的 SOXL (3倍)。
+            """)
+        else:
+            st.info("✅ 目前曝險度完美貼合生命週期軌跡！請繼續保持。")
 
         st.divider()
         
@@ -509,7 +519,6 @@ if st.session_state.analyzed:
                 e_8 = ((fc_8 + hc_rem) * (target_k / 100.0)) / fc_8 * 100
                 e_10 = ((fc_10 + hc_rem) * (target_k / 100.0)) / fc_10 * 100
                 
-            # 🌟 修復 0 會被誤判成 False 的 Bug
             if e_6 < 200 and drop_year_6 is None: drop_year_6 = y
             if e_8 < 200 and drop_year_8 is None: drop_year_8 = y
             if e_10 < 200 and drop_year_10 is None: drop_year_10 = y
@@ -527,23 +536,20 @@ if st.session_state.analyzed:
         
         st.divider()
         
-        # 4. 具體行動指南 (修復顯示文字邏輯)
         def get_drop_year_str(dy):
             if dy == 0:
-                return "現在 (已跌破 200%，代表你已經進入降落期！)"
+                return "現在！(已跌破 200%，代表你已經正式進入降落期)"
             elif dy is not None:
                 return f"第 {dy} 年"
             else:
                 return "超過 10 年"
 
-        st.markdown("### 🎯 4. 具體行動指南")
-        st.write(f"根據推算，你的最佳曝險度大約會在以下時間點 **正式跌破 200% (啟動降落)**：")
+        st.markdown("### 🎯 4. 降落時間預測")
+        st.write(f"根據推算，你的最佳曝險度大約會在以下時間點 **正式跌破 200% (啟動平滑降落)**：")
         st.markdown(f"""
         * 🟢 **樂觀情境 (10%)：** {get_drop_year_str(drop_year_10)}
         * 🟡 **正常情境 (8%)：** {get_drop_year_str(drop_year_8)}
         * 🔴 **保守情境 (6%)：** {get_drop_year_str(drop_year_6)}
         """)
-        
-        st.warning("⚠️ **降槓桿操盤提醒：**\n\n計算總曝險時是「台股 + 美股」合併計算的。未來若需要降槓桿（例如從 200% 降到 150%），你可以自由決定要賣出台股的 00631L 或是美股的 SOXL 換回 1 倍原型部位，**不需要將美金匯回台灣**，只要在各自的券商內切換標的即可！")
 
 st.caption("📱 提示：將此網頁「加入主畫面」，它就是你的專屬實戰 App！")
