@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V4.9 - 報價精準定位版 (含實際曝險雷達)
+# 賴賴投資戰情室 V4.9 - 報價精準定位版 (曝險公式透視版)
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
@@ -445,7 +445,7 @@ if st.session_state.analyzed:
         target_stock = W * (target_k / 100.0)
         current_E = (target_stock / FC * 100) if FC > 0 else 0
         
-        # 🌟 2. 實際曝險度運算
+        # 2. 實際曝險度運算
         twd_exposure_val = cur_val * 2 # 台股 00631L 是 2倍
         # 美股股票曝險：SOXL(3倍) + BITX(2倍) * 匯率 (TMF債券不列入股票曝險)
         soxl_val_twd = us_live['SOXL']['curr'] * us_positions['SOXL']['shares'] * usd_twd
@@ -469,12 +469,20 @@ if st.session_state.analyzed:
         
         st.divider()
         
-        # 🌟 UI: 實際曝險 vs 應有曝險
+        # 🌟 UI: 實際曝險 vs 應有曝險 (透視公式版)
         st.markdown("### ⚖️ 2. 實際曝險 vs 應有曝險 (雷達檢視)")
+        st.markdown(f"""
+        **🔍 實際曝險度計算公式拆解：**
+        * 🏦 **總淨資產 (FC，大分母)：** NT$ {FC:,.0f}
+        * 🇹🇼 **台股實質跳動額 (分子 1)：** NT$ {twd_exposure_val:,.0f} (00631L市值 × 2倍)
+        * 🇺🇸 **美股實質跳動額 (分子 2)：** NT$ {usd_exposure_val:,.0f} (不含避險債券，依槓桿還原)
+        * 🔥 **總實質跳動金額 (大分子)：** NT$ {total_exposure_val:,.0f}
+        """)
+
         c_e1, c_e2, c_e3 = st.columns(3)
         c_e1.metric("🎯 應有總曝險度", f"{current_E:.1f}%", "Lifecycle 目標")
         c_e2.metric("🔥 實際總曝險度", f"{actual_total_E:.1f}%", f"差距: {actual_total_E - current_E:+.1f}%")
-        c_e3.metric("🇹🇼台股 / 🇺🇸美股", f"{actual_twd_E:.0f}% / {actual_usd_E:.0f}%", "美股不含TMF債券")
+        c_e3.metric("🇹🇼台股 / 🇺🇸美股 (實質)", f"{actual_twd_E:.0f}% / {actual_usd_E:.0f}%", "各佔 FC 之比例")
         
         st.info("💡 如果「實際總曝險度」小於「應有總曝險度」，代表你目前處於完全可以承受高槓桿的安全期，甚至還有加碼空間！")
 
@@ -501,6 +509,7 @@ if st.session_state.analyzed:
                 e_8 = ((fc_8 + hc_rem) * (target_k / 100.0)) / fc_8 * 100
                 e_10 = ((fc_10 + hc_rem) * (target_k / 100.0)) / fc_10 * 100
                 
+            # 🌟 修復 0 會被誤判成 False 的 Bug
             if e_6 < 200 and drop_year_6 is None: drop_year_6 = y
             if e_8 < 200 and drop_year_8 is None: drop_year_8 = y
             if e_10 < 200 and drop_year_10 is None: drop_year_10 = y
@@ -518,13 +527,21 @@ if st.session_state.analyzed:
         
         st.divider()
         
-        # 4. 具體行動指南
+        # 4. 具體行動指南 (修復顯示文字邏輯)
+        def get_drop_year_str(dy):
+            if dy == 0:
+                return "現在 (已跌破 200%，代表你已經進入降落期！)"
+            elif dy is not None:
+                return f"第 {dy} 年"
+            else:
+                return "超過 10 年"
+
         st.markdown("### 🎯 4. 具體行動指南")
         st.write(f"根據推算，你的最佳曝險度大約會在以下時間點 **正式跌破 200% (啟動降落)**：")
         st.markdown(f"""
-        * 🟢 **樂觀情境 (10%)：** 第 **{drop_year_10 if drop_year_10 else '>10'}** 年
-        * 🟡 **正常情境 (8%)：** 第 **{drop_year_8 if drop_year_8 else '>10'}** 年
-        * 🔴 **保守情境 (6%)：** 第 **{drop_year_6 if drop_year_6 else '>10'}** 年
+        * 🟢 **樂觀情境 (10%)：** {get_drop_year_str(drop_year_10)}
+        * 🟡 **正常情境 (8%)：** {get_drop_year_str(drop_year_8)}
+        * 🔴 **保守情境 (6%)：** {get_drop_year_str(drop_year_6)}
         """)
         
         st.warning("⚠️ **降槓桿操盤提醒：**\n\n計算總曝險時是「台股 + 美股」合併計算的。未來若需要降槓桿（例如從 200% 降到 150%），你可以自由決定要賣出台股的 00631L 或是美股的 SOXL 換回 1 倍原型部位，**不需要將美金匯回台灣**，只要在各自的券商內切換標的即可！")
