@@ -7,11 +7,11 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V5.8 - 完美基底 + 退休導航 (語法校對版)
+# 賴賴投資戰情室 V5.9 - 退休版面優化版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
-st.title("🛡️ 賴賴投資戰情室 V5.8")
+st.title("🛡️ 賴賴投資戰情室 V5.9")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -69,7 +69,7 @@ if st.session_state.analyzed:
     }
 
     # ==========================================
-    # 🇹🇼 分頁一：台股 00631L (保留 V4.9 完美狀態)
+    # 🇹🇼 分頁一：台股 00631L
     # ==========================================
     with tab1:
         with st.spinner('📡 抓取即時數據與歷史運算中...'):
@@ -334,7 +334,7 @@ if st.session_state.analyzed:
                         "庫存股數": trade_shares, "手續費": trade_fee,
                         "持有成本": preview_cost, "損益試算": 0, "報酬率": "0.00%" 
                     }])
-                    updated_df = pd.concat([df_trades_raw, new_data], ignore_index=True)
+                    updated_df = pd.concat([df_trades_raw, ignore_index=True], ignore_index=True)
                     try:
                         conn.update(data=updated_df)
                         st.cache_data.clear() 
@@ -343,20 +343,13 @@ if st.session_state.analyzed:
                         st.error(f"❌ 寫入失敗。({e})")
 
     # ==========================================
-    # 🇺🇸 分頁二：美股狙擊系統 (保留 V4.9 完美狀態)
+    # 🇺🇸 分頁二：美股狙擊系統
     # ==========================================
     with tab2:
         with st.spinner('📡 抓取美股數據中...'):
             tickers = ["SOXX", "SOXL", "TMF", "BITX"]
             us_data = yf.download(tickers, period="200d", progress=False)
             
-            us_positions = {
-                "SOXL": {"shares": 545, "cost": 50.99},
-                "TMF": {"shares": 1050, "cost": 52.94},
-                "BITX": {"shares": 11, "cost": 29.67}
-            }
-            
-            us_live = {}
             for t in us_positions.keys():
                 try:
                     tkr_us = yf.Ticker(t)
@@ -444,7 +437,7 @@ if st.session_state.analyzed:
                 st.markdown("---")
 
     # ==========================================
-    # 🛬 分頁三：生命週期與退休規劃 (嚴格校對版)
+    # 🛬 分頁三：生命週期降落軌跡與退休導航
     # ==========================================
     with tab3:
         st.subheader("🛬 生命週期投資法 & 退休終局導航")
@@ -475,7 +468,7 @@ if st.session_state.analyzed:
         actual_total_E = (total_exposure_val / FC * 100) if FC > 0 else 0
 
         # UI: 實際曝險 vs 應有曝險 
-        st.markdown("### ⚖️ 1. 實際曝險 vs 應有曝險 (透視清單)")
+        st.markdown("### ⚖️ 1. 實際曝險 vs 應有曝險")
         st.markdown(f"""
         | 戰區 | 曝險金額 | 淨資產 | 實際曝險度 |
         | :--- | :--- | :--- | :--- |
@@ -527,9 +520,9 @@ if st.session_state.analyzed:
 
         st.markdown(f"**📈 情境 A：若工作 {hc_years} 年後退休**")
         col_ra1, col_ra2, col_ra3 = st.columns(3)
-        col_ra1.metric(f"屆時滾出資產", f"NT$ {fc_future_10:,.0f}")
-        col_ra2.metric(f"未來需月領", f"NT$ {monthly_withdraw_future:,.0f}")
-        col_ra3.metric("約等同現在月薪", f"NT$ {monthly_withdraw_now_equiv:,.0f}", f"扣除通膨")
+        col_ra1.metric(f"屆時滾出資產", f"NT$ {fc_future_10 / 10000:,.0f} 萬")
+        col_ra2.metric(f"未來每月可領", f"NT$ {monthly_withdraw_future:,.0f}")
+        col_ra3.metric("約等同現在每月可領", f"NT$ {monthly_withdraw_now_equiv:,.0f}", f"扣除通膨")
         
         st.write("")
         st.markdown(f"**🎯 情境 B：為了達到現在體感的「月領 {target_monthly_now/10000:.0f} 萬」退休金**")
@@ -547,14 +540,14 @@ if st.session_state.analyzed:
         
         if found_year:
             col_rb1, col_rb2, col_rb3 = st.columns(3)
-            col_rb1.metric("需滾出退休資產", f"NT$ {final_req_fc:,.0f}")
-            col_rb2.metric("屆時未來需月領", f"NT$ {final_monthly_fut:,.0f}", f"現值 {target_monthly_now:,.0f}")
+            col_rb1.metric("需滾出退休資產", f"NT$ {final_req_fc / 10000:,.0f} 萬")
+            col_rb2.metric("屆時未來每月可領", f"NT$ {final_monthly_fut:,.0f}", f"現值 {target_monthly_now:,.0f}")
             col_rb3.metric("工作剩餘年限", f"{found_year} 年")
             st.success(f"🎊 **目標達成預測！依照目前投入，還要工作 {found_year} 年即可光榮退役。**")
         else:
             col_rb1, col_rb2, col_rb3 = st.columns(3)
-            col_rb1.metric("需滾出退休資產", f"NT$ {target_monthly_now * 12 / withdrawal_rate * ((1 + inflation_rate)**40):,.0f}")
-            col_rb2.metric("屆時未來需月領", f"NT$ {target_monthly_now * ((1 + inflation_rate)**40):,.0f}")
+            col_rb1.metric("需滾出退休資產", f"NT$ {(target_monthly_now * 12 / withdrawal_rate * ((1 + inflation_rate)**40)) / 10000:,.0f} 萬")
+            col_rb2.metric("屆時未來每月可領", f"NT$ {target_monthly_now * ((1 + inflation_rate)**40):,.0f}")
             col_rb3.metric("工作剩餘年限", f"> 40 年")
             st.warning("⚠️ 依目前投入速度，40 年內難以達成此目標月薪，建議增加投入或調整目標。")
 
@@ -562,6 +555,8 @@ if st.session_state.analyzed:
         
         # --- 🛬 降落時程推演表 ---
         st.markdown("### 🛬 3. 降落時程推演表 (Glide Path)")
+        st.info("💡 **這張表怎麼看？** 這是你未來的【槓桿降落路線圖】。它推算隨著你持續投入與資產成長，你的「應有曝險度」會如何逐年下降。保守(6%)與樂觀(10%)是模擬市場好壞的情境，幫你抓出最差與最好的降落時間點。")
+
         records_gp = []
         f6, f8, f10 = FC, FC, FC
         drop_year_6, drop_year_8, drop_year_10 = None, None, None
@@ -590,23 +585,5 @@ if st.session_state.analyzed:
             })
             
         st.dataframe(pd.DataFrame(records_gp), use_container_width=True, hide_index=True)
-        
-        st.divider()
-        
-        def get_drop_year_str(dy):
-            if dy == 0: 
-                return "現在！(已跌破 200%，代表你已經正式進入降落期)"
-            elif dy is not None: 
-                return f"第 {dy} 年"
-            else: 
-                return "超過 10 年"
-
-        st.markdown("### 🎯 4. 降落時間預測")
-        st.write(f"根據推算，你的最佳曝險度大約會在以下時間點 **正式跌破 200% (啟動平滑降落)**：")
-        st.markdown(f"""
-        * 🟢 **樂觀情境 (10%)：** {get_drop_year_str(drop_year_10)}
-        * 🟡 **正常情境 (8%)：** {get_drop_year_str(drop_year_8)}
-        * 🔴 **保守情境 (6%)：** {get_drop_year_str(drop_year_6)}
-        """)
 
 st.caption("📱 提示：將此網頁「加入主畫面」，它就是你的專屬實戰 App！")
