@@ -7,11 +7,11 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 
 # ==========================================
-# 賴賴投資戰情室 V4.8 - 八宮格完美修復版
+# 賴賴投資戰情室 V4.9 - 報價精準定位版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
-st.title("🛡️ 賴賴投資戰情室 V4.8")
+st.title("🛡️ 賴賴投資戰情室 V4.9")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -65,8 +65,17 @@ if st.session_state.analyzed:
             if mask.any():
                 adj_prices.loc[mask] = round(adj_prices.loc[mask] / 22.0, 2)
                 
-            current_p = float(adj_prices.iloc[-1])
-            yest_close = float(adj_prices.iloc[-2])
+            # 🚀 關鍵修復：獨立呼叫即時快訊 API 取得現價與昨日收盤，避開歷史資料表錯位問題
+            tkr = yf.Ticker(TICKER)
+            try:
+                raw_curr = float(tkr.fast_info.last_price)
+                raw_yest = float(tkr.fast_info.previous_close)
+            except:
+                raw_curr = float(raw_prices.iloc[-1])
+                raw_yest = float(raw_prices.iloc[-2])
+                
+            current_p = round(raw_curr / 22.0, 2) if raw_curr > 100 else raw_curr
+            yest_close = round(raw_yest / 22.0, 2) if raw_yest > 100 else raw_yest
             
             cur_val = actual_shares * current_p
             abs_pnl = cur_val - actual_cost
@@ -76,6 +85,26 @@ if st.session_state.analyzed:
             intraday_drop = (current_p - yest_close) / yest_close
             today_pnl = (current_p - yest_close) * actual_shares
             
+            # --- 儀表板數據 ---
+            st.subheader("📊 詳細庫存與損益明細")
+            c1, c2 = st.columns(2)
+            c1.metric("總市值 (元)", f"NT$ {cur_val:,.0f}")
+            c2.metric("總投入成本", f"NT$ {actual_cost:,.0f}")
+            
+            c3, c4 = st.columns(2)
+            c3.metric("未實現總損益", f"NT$ {abs_pnl:,.0f}", f"{pnl_real*100:+.2f}%")
+            c4.metric("今日損益", f"NT$ {today_pnl:,.0f}", f"{intraday_drop*100:+.2f}%")
+            
+            c5, c6 = st.columns(2)
+            c5.metric("庫存總股數", f"{actual_shares:,.0f} 股")
+            c6.metric("持有均價", f"NT$ {avg_cost:,.2f}")
+            
+            c7, c8 = st.columns(2)
+            c7.metric("今日還原現價", f"NT$ {current_p:.2f}")
+            c8.metric("昨日還原收盤", f"NT$ {yest_close:.2f}")
+
+            st.divider()
+
             if pnl_real > 0:
                 v3_dynamic_base = base_m * (1 - min(pnl_real, 0.20))
             else:
@@ -99,29 +128,30 @@ if st.session_state.analyzed:
             current_exposure = (cur_val * 2) / net_asset if net_asset > 0 else 0
             target_stock_value = ((target_exp_pct / 100.0) * net_asset) / 2
             rebalance_diff = cur_val - target_stock_value
+
+            # --- 戰術圖表區 ---
+            st.subheader("📈 即時盤中決策台")
+            st.write(f"🔹 **當前動態基準金額：** NT$ {v3_dynamic_base:,.0f}")
+            if intraday_drop <= -0.03:
+                st.error(f"💡 **盤中行動指令**：\n\n{suggest_buy_action}")
+            else:
+                st.info(f"💡 **盤中行動指令**：\n\n{suggest_buy_action}")
             
-            # --- 儀表板數據 (補回第八宮格) ---
-            st.subheader("📊 詳細庫存與損益明細")
-            c1, c2 = st.columns(2)
-            c1.metric("總市值 (元)", f"NT$ {cur_val:,.0f}")
-            c2.metric("總投入成本", f"NT$ {actual_cost:,.0f}")
+            st.divider()
             
-            c3, c4 = st.columns(2)
-            c3.metric("未實現總損益", f"NT$ {abs_pnl:,.0f}", f"{pnl_real*100:+.2f}%")
-            c4.metric("今日損益", f"NT$ {today_pnl:,.0f}", f"{intraday_drop*100:+.2f}%")
+            st.subheader("⚖️ 資產再平衡詳細檢視")
+            st.write(f"🔹 **總淨資產 (股+現-債):** NT$ {net_asset:,.0f}")
+            st.write(f"🔹 **目前實際曝險度:** **{current_exposure*100:.2f}%** (目標: {target_exp_pct}%)")
             
-            c5, c6 = st.columns(2)
-            c5.metric("庫存總股數", f"{actual_shares:,.0f} 股")
-            c6.metric("持有均價", f"NT$ {avg_cost:,.2f}")
-            
-            # 🐞 這裡就是不小心被刪掉的第七、第八宮格！
-            c7, c8 = st.columns(2)
-            c7.metric("今日還原現價", f"NT$ {current_p:.2f}")
-            c8.metric("昨日還原收盤", f"NT$ {yest_close:.2f}")
+            if rebalance_diff > 0:
+                st.warning(f"🚨 【曝險過高】應減碼賣出市值： **NT$ {rebalance_diff:,.0f}**")
+            elif rebalance_diff < 0:
+                st.success(f"🟢 【曝險過低】可加碼買進市值： **NT$ {abs(rebalance_diff):,.0f}**")
+            else:
+                st.success("✅ 目前曝險完美符合目標，不需調整。")
 
             st.divider()
 
-            # --- 戰術圖表區 ---
             st.subheader("🌐 戰術圖表分析")
             recent_prices = adj_prices[adj_prices.index >= pd.to_datetime('2024-01-01')]
             
@@ -134,7 +164,7 @@ if st.session_state.analyzed:
             fig1.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=10, b=0), height=250)
             st.plotly_chart(fig1, use_container_width=True)
 
-            # B. 多空戰略動能圖 (20日乖離率 Bias)
+            # B. 多空戰略動能圖
             st.write("📊 **B. 多空戰略動能圖 (乖離率雙向動能)**")
             st.caption("突破 0 軸代表強勢上漲，跌破 0 軸代表回檔修正。")
             
@@ -151,7 +181,7 @@ if st.session_state.analyzed:
             fig2.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=10, b=0), height=250, yaxis_title="乖離率 %")
             st.plotly_chart(fig2, use_container_width=True)
 
-            # C. 庫存損益率歷史真實軌跡
+            # C. 庫存損益率真實軌跡
             st.write("💰 **C. 庫存損益率歷史真實軌跡**")
             st.caption("依照你的歷史交易紀錄，逐日還原當下的真實損益表現。")
             
@@ -230,6 +260,15 @@ if st.session_state.analyzed:
                 "BITX": {"shares": 11, "cost": 29.67}
             }
             
+            # 🚀 預先抓取所有美股即時快訊報價，增加穩定度與速度
+            us_live = {}
+            for t in us_positions.keys():
+                try:
+                    tkr_us = yf.Ticker(t)
+                    us_live[t] = {'curr': float(tkr_us.fast_info.last_price), 'yest': float(tkr_us.fast_info.previous_close)}
+                except:
+                    us_live[t] = {'curr': float(us_data['Close'][t].dropna().iloc[-1]), 'yest': float(us_data['Close'][t].dropna().iloc[-2])}
+            
             st.subheader("🎯 1. 大盤趨勢與輪動階梯")
             soxx_close = us_data['Close']['SOXX'].dropna()
             soxx_100dma = soxx_close.rolling(window=100).mean()
@@ -244,7 +283,7 @@ if st.session_state.analyzed:
             else:
                 st.error(f"🔴 **停利訊號觸發！** | 現價:{curr_soxx:.2f} 跌破 100DMA ({curr_dma:.2f} | 差距: {soxx_diff:.2f} / {soxx_diff_pct:.2f}%)\n\n**指令：全數賣出 SOXL 轉入 TLT。**")
             
-            curr_soxl = float(us_data['Close']['SOXL'].dropna().iloc[-1])
+            curr_soxl = us_live['SOXL']['curr']
             steps = [30.14, 21.09, 14.77]
             col_s1, col_s2, col_s3 = st.columns(3)
             cols = [col_s1, col_s2, col_s3]
@@ -263,8 +302,8 @@ if st.session_state.analyzed:
             total_yest_val = 0
             
             for t, info in us_positions.items():
-                p_curr = float(us_data['Close'][t].dropna().iloc[-1])
-                p_yest = float(us_data['Close'][t].dropna().iloc[-2])
+                p_curr = us_live[t]['curr']
+                p_yest = us_live[t]['yest']
                 shares = info['shares']
                 
                 total_us_val += p_curr * shares
@@ -289,8 +328,8 @@ if st.session_state.analyzed:
 
             st.subheader("📦 3. 個股明細快報")
             for t, info in us_positions.items():
-                p_curr = float(us_data['Close'][t].dropna().iloc[-1])
-                p_yest = float(us_data['Close'][t].dropna().iloc[-2])
+                p_curr = us_live[t]['curr']
+                p_yest = us_live[t]['yest']
                 shares = info['shares']
                 avg_cost = info['cost']
                 
