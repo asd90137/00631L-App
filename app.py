@@ -7,21 +7,27 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V4.9 - 報價精準定位版 (極限圖表標示版)
+# 賴賴投資戰情室 V5.0 - 戰略全能版 (含生命週期降落)
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
-st.title("🛡️ 賴賴投資戰情室 V4.9")
+st.title("🛡️ 賴賴投資戰情室 V5.0")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
 
-st.sidebar.header("⚙️ 台股參數")
+st.sidebar.header("⚙️ 資金與曝險參數")
 loan1 = st.sidebar.number_input("1. 信貸一剩餘本金", value=2056231)
 loan2 = st.sidebar.number_input("2. 信貸二剩餘本金", value=935907)
 base_m = st.sidebar.number_input("3. 基準每月定期定額", value=100000)
 cash = st.sidebar.number_input("4. 目前帳戶可用現金", value=2000000)
 target_exp_pct = st.sidebar.number_input("5. 設定目標曝險度 (%)", value=200)
+
+st.sidebar.divider()
+st.sidebar.header("⚙️ 生命週期規劃參數")
+usd_twd = st.sidebar.number_input("6. 目前美元匯率", value=32.0)
+hc_years = st.sidebar.number_input("7. 預計剩餘投入年限", value=10)
+target_k = st.sidebar.number_input("8. 一生目標曝險度 (%)", value=83)
 
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
@@ -43,9 +49,17 @@ except Exception as e:
 if st.button("🚀 啟動戰情室全面掃描", use_container_width=True):
     st.session_state.analyzed = True
 
-tab1, tab2 = st.tabs(["🇹🇼 台股 00631L", "🇺🇸 美股狙擊系統"])
+# 🌟 新增第三個標籤頁
+tab1, tab2, tab3 = st.tabs(["🇹🇼 台股 00631L", "🇺🇸 美股狙擊系統", "🛬 生命週期軌跡"])
 
 if st.session_state.analyzed:
+    # 預先宣告總市值變數，供給生命週期計算使用
+    cur_val = 0
+    total_us_val = 0
+
+    # ==========================================
+    # 🇹🇼 分頁一：台股 00631L
+    # ==========================================
     with tab1:
         with st.spinner('📡 抓取即時數據與歷史運算中...'):
             TICKER = "00631L.TW"
@@ -94,7 +108,6 @@ if st.session_state.analyzed:
             intraday_drop = (current_p - yest_close) / yest_close if yest_close > 0 else 0
             today_pnl = (current_p - yest_close) * actual_shares
             
-            # --- 儀表板數據 ---
             st.subheader("📊 詳細庫存與損益明細")
             c1, c2 = st.columns(2)
             c1.metric("總市值 (元)", f"NT$ {cur_val:,.0f}")
@@ -114,7 +127,6 @@ if st.session_state.analyzed:
 
             st.divider()
 
-            # --- 📜 逐筆投資明細表 (最新日期置頂 + 美化版) ---
             st.subheader("📜 逐筆投資戰績表")
             with st.expander("點擊展開：檢視每筆子彈的獨立作戰績效", expanded=False):
                 if not df_trades_raw.empty:
@@ -160,7 +172,6 @@ if st.session_state.analyzed:
                                 '🎯 總報酬': f"{lot_roi*100:+.2f}%",
                                 '🚀 年化報酬': ann_roi_str
                             })
-                        
                         st.dataframe(pd.DataFrame(records), use_container_width=True, hide_index=True)
                     else:
                         st.write("目前尚無買入紀錄。")
@@ -215,30 +226,22 @@ if st.session_state.analyzed:
 
             st.divider()
 
-            # ==========================================
-            # 🌐 戰術圖表分析 (新增極值標示)
-            # ==========================================
             st.subheader("🌐 戰術圖表分析")
             recent_prices = adj_prices[adj_prices.index >= pd.to_datetime('2024-01-01')]
             
-            # --- A. 價格走勢與當前均價防線 ---
             st.write("📈 **A. 價格走勢與當前均價防線**")
             fig1 = go.Figure()
             fig1.add_trace(go.Scatter(x=recent_prices.index, y=recent_prices.values, mode='lines', name='還原股價', line=dict(color='#E71D36', width=2)))
             if avg_cost > 0:
                 fig1.add_hline(y=avg_cost, line_dash="dash", line_color="#00A86B", annotation_text=f"你的均價: {avg_cost:.2f}")
-            
-            # 💡 標示最大值與最小值
             if not recent_prices.empty:
                 max_idx, max_val = recent_prices.idxmax(), recent_prices.max()
                 min_idx, min_val = recent_prices.idxmin(), recent_prices.min()
                 fig1.add_annotation(x=max_idx, y=max_val, text=f"高: {max_val:.2f}", showarrow=True, arrowhead=1, ax=0, ay=-30)
                 fig1.add_annotation(x=min_idx, y=min_val, text=f"低: {min_val:.2f}", showarrow=True, arrowhead=1, ax=0, ay=30)
-                
             fig1.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=35, b=0), height=250)
             st.plotly_chart(fig1, use_container_width=True)
 
-            # --- B. 多空戰略動能圖 (乖離率雙向動能) ---
             st.write("📊 **B. 多空戰略動能圖 (乖離率雙向動能)**")
             ma20 = recent_prices.rolling(window=20).mean()
             bias = (recent_prices - ma20) / ma20 * 100
@@ -248,19 +251,15 @@ if st.session_state.analyzed:
             fig2.add_hline(y=0, line_width=1, line_color="black") 
             for val, color, txt in [(-5, "gray", "標準"), (-10, "orange", "恐慌"), (-15, "red", "重壓")]:
                 fig2.add_hline(y=val, line_dash="dot", line_color=color, annotation_text=txt)
-                
-            # 💡 標示最大值與最小值
             bias_clean = bias.dropna()
             if not bias_clean.empty:
                 b_max_idx, b_max_val = bias_clean.idxmax(), bias_clean.max()
                 b_min_idx, b_min_val = bias_clean.idxmin(), bias_clean.min()
                 fig2.add_annotation(x=b_max_idx, y=b_max_val, text=f"最高: {b_max_val:.1f}%", showarrow=True, arrowhead=1, ax=0, ay=-30)
                 fig2.add_annotation(x=b_min_idx, y=b_min_val, text=f"最低: {b_min_val:.1f}%", showarrow=True, arrowhead=1, ax=0, ay=30)
-
             fig2.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=35, b=0), height=250, yaxis_title="乖離率 %")
             st.plotly_chart(fig2, use_container_width=True)
 
-            # --- C. 庫存損益率歷史真實軌跡 ---
             st.write("💰 **C. 庫存損益率歷史真實軌跡**")
             if not temp_df.empty:
                 trade_history = temp_df.copy()
@@ -286,15 +285,12 @@ if st.session_state.analyzed:
                 fig3.add_hline(y=0, line_width=2, line_color="black") 
                 fig3.add_hrect(y0=0, y1=max(max_val, 10)+5, fillcolor="green", opacity=0.1, layer="below", line_width=0)
                 fig3.add_hrect(y0=min(min_val, -10)-5, y1=0, fillcolor="red", opacity=0.1, layer="below", line_width=0)
-                
-                # 💡 標示最大值與最小值
                 pnl_clean = recent_pnl_pct.dropna()
                 if not pnl_clean.empty and (max_val != 0 or min_val != 0):
                     p_max_idx, p_max_val = pnl_clean.idxmax(), pnl_clean.max()
                     p_min_idx, p_min_val = pnl_clean.idxmin(), pnl_clean.min()
                     fig3.add_annotation(x=p_max_idx, y=p_max_val, text=f"最高: {p_max_val:.1f}%", showarrow=True, arrowhead=1, ax=0, ay=-30)
                     fig3.add_annotation(x=p_min_idx, y=p_min_val, text=f"最低: {p_min_val:.1f}%", showarrow=True, arrowhead=1, ax=0, ay=30)
-
                 fig3.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=35, b=0), height=250, yaxis_title="真實損益 %")
                 st.plotly_chart(fig3, use_container_width=True)
             else:
@@ -393,6 +389,8 @@ if st.session_state.analyzed:
                 total_yest_val += p_yest * shares
                 total_us_cost += info['cost'] * shares
                 total_today_pnl += (p_curr - p_yest) * shares
+                
+            total_us_val_twd = total_us_val * usd_twd # 傳遞給分頁三使用
 
             total_abs_pnl = total_us_val - total_us_cost
             total_pnl_pct = total_abs_pnl / total_us_cost if total_us_cost > 0 else 0
@@ -416,17 +414,95 @@ if st.session_state.analyzed:
                 shares = info['shares']
                 avg_cost = info['cost']
                 
-                cur_val = p_curr * shares
-                tot_cost = avg_cost * shares
-                abs_pnl = cur_val - tot_cost
-                pnl_pct = abs_pnl / tot_cost if tot_cost > 0 else 0
-                today_pnl_val = (p_curr - p_yest) * shares
-                today_pnl_pct = (p_curr / p_yest - 1)
+                cur_val_us = p_curr * shares
+                tot_cost_us = avg_cost * shares
+                abs_pnl_us = cur_val_us - tot_cost_us
+                pnl_pct_us = abs_pnl_us / tot_cost_us if tot_cost_us > 0 else 0
+                today_pnl_val_us = (p_curr - p_yest) * shares
+                today_pnl_pct_us = (p_curr / p_yest - 1)
                 
                 st.markdown(f"#### 📌 **{t}**")
-                st.write(f"🔹 **今日現價:** ${p_curr:.2f} ({today_pnl_pct*100:+.2f}%) ｜ **今日損益:** ${today_pnl_val:,.2f}")
-                st.write(f"🔹 **持有均價:** ${avg_cost:.2f} ｜ **未實現損益:** ${abs_pnl:,.2f} ({pnl_pct*100:+.2f}%)")
-                st.write(f"🔹 **庫存股數:** {shares:,.0f} 股 ｜ **總市值:** ${cur_val:,.2f}")
+                st.write(f"🔹 **今日現價:** ${p_curr:.2f} ({today_pnl_pct_us*100:+.2f}%) ｜ **今日損益:** ${today_pnl_val_us:,.2f}")
+                st.write(f"🔹 **持有均價:** ${avg_cost:.2f} ｜ **未實現損益:** ${abs_pnl_us:,.2f} ({pnl_pct_us*100:+.2f}%)")
+                st.write(f"🔹 **庫存股數:** {shares:,.0f} 股 ｜ **總市值:** ${cur_val_us:,.2f}")
                 st.markdown("---")
+
+    # ==========================================
+    # 🛬 分頁三：生命週期降落軌跡 (Lifecycle Investing)
+    # ==========================================
+    with tab3:
+        st.subheader("🛬 生命週期投資法 (Lifecycle Investing)")
+        st.write("系統已自動抓取你當前的台美股真實市值、現金與信貸，為你推演未來的最佳化降落軌跡 (Glide Path)。")
+        
+        # 1. 數值運算
+        FC = cur_val + total_us_val_twd + cash - (loan1 + loan2)
+        annual_inv = base_m * 12
+        HC = annual_inv * hc_years
+        W = FC + HC
+        target_stock = W * (target_k / 100.0)
+        current_E = (target_stock / FC * 100) if FC > 0 else 0
+        
+        # 2. 當前戰況總結
+        st.markdown("### 📊 1. 當前戰況總結")
+        c_l1, c_l2 = st.columns(2)
+        c_l1.metric("當前總金融資本 (FC)", f"NT$ {FC:,.0f}", "台股+美股+現-債")
+        c_l2.metric("未來人力資本 (HC)", f"NT$ {HC:,.0f}", f"未來 {hc_years} 年")
+        
+        c_l3, c_l4 = st.columns(2)
+        c_l3.metric("一生總財富 (W)", f"NT$ {W:,.0f}", "FC + HC")
+        c_l4.metric("目標股票部位", f"NT$ {target_stock:,.0f}", f"目標曝險 {target_k}%")
+        
+        st.info(f"💡 **當前應有曝險度 (E) = {current_E:.1f}%**\n\n目前你的總資產規模，對應你未來的人力資本，最佳化的曝險水位為 **{current_E:.1f}%**。若大於 200%，代表你目前處於完全可以承受高槓桿的黃金期！")
+        
+        st.divider()
+        
+        # 3. 降落時程推演表
+        st.markdown("### 🛬 2. 降落時程推演表 (Glide Path)")
+        st.caption("以下推演在保守(6%)、正常(8%)、樂觀(10%)三種年化報酬情境下，你的FC成長與應有曝險度變化。")
+        
+        records_gp = []
+        fc_6, fc_8, fc_10 = FC, FC, FC
+        drop_year_6, drop_year_8, drop_year_10 = None, None, None
+        
+        for y in range(0, hc_years + 1):
+            if y == 0:
+                e_6 = e_8 = e_10 = current_E
+            else:
+                fc_6 = fc_6 * 1.06 + annual_inv
+                fc_8 = fc_8 * 1.08 + annual_inv
+                fc_10 = fc_10 * 1.10 + annual_inv
+                
+                hc_rem = max(HC - annual_inv * y, 0)
+                e_6 = ((fc_6 + hc_rem) * (target_k / 100.0)) / fc_6 * 100
+                e_8 = ((fc_8 + hc_rem) * (target_k / 100.0)) / fc_8 * 100
+                e_10 = ((fc_10 + hc_rem) * (target_k / 100.0)) / fc_10 * 100
+                
+            if e_6 < 200 and drop_year_6 is None: drop_year_6 = y
+            if e_8 < 200 and drop_year_8 is None: drop_year_8 = y
+            if e_10 < 200 and drop_year_10 is None: drop_year_10 = y
+            
+            records_gp.append({
+                "第幾年": f"第 {y} 年" if y > 0 else "現在 (第0年)",
+                "剩餘 HC": f"{max(HC - annual_inv * y, 0):,.0f}",
+                "預估 FC (8%)": f"{fc_8 if y>0 else FC:,.0f}",
+                "應有曝險(8%)": f"{e_8:.1f}%",
+                "保守曝險(6%)": f"{e_6:.1f}%",
+                "樂觀曝險(10%)": f"{e_10:.1f}%"
+            })
+            
+        st.dataframe(pd.DataFrame(records_gp), use_container_width=True, hide_index=True)
+        
+        st.divider()
+        
+        # 4. 具體行動指南
+        st.markdown("### 🎯 3. 具體行動指南")
+        st.write(f"根據推算，你的最佳曝險度大約會在以下時間點 **正式跌破 200% (啟動降落)**：")
+        st.markdown(f"""
+        * 🟢 **樂觀情境 (10%)：** 第 **{drop_year_10 if drop_year_10 else '>10'}** 年
+        * 🟡 **正常情境 (8%)：** 第 **{drop_year_8 if drop_year_8 else '>10'}** 年
+        * 🔴 **保守情境 (6%)：** 第 **{drop_year_6 if drop_year_6 else '>10'}** 年
+        """)
+        
+        st.warning("⚠️ **降槓桿操盤提醒：**\n\n計算總曝險時是「台股 + 美股」合併計算的。未來若需要降槓桿（例如從 200% 降到 150%），你可以自由決定要賣出台股的 00631L 或是美股的 SOXL 換回 1 倍原型部位，**不需要將美金匯回台灣**，只要在各自的券商內切換標的即可！")
 
 st.caption("📱 提示：將此網頁「加入主畫面」，它就是你的專屬實戰 App！")
