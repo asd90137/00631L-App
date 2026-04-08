@@ -7,11 +7,11 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V5.9 - 退休版面優化版
+# 賴賴投資戰情室 V6.0 - 完美除蟲最終版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
-st.title("🛡️ 賴賴投資戰情室 V5.9")
+st.title("🛡️ 賴賴投資戰情室 V6.0")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -334,7 +334,8 @@ if st.session_state.analyzed:
                         "庫存股數": trade_shares, "手續費": trade_fee,
                         "持有成本": preview_cost, "損益試算": 0, "報酬率": "0.00%" 
                     }])
-                    updated_df = pd.concat([df_trades_raw, ignore_index=True], ignore_index=True)
+                    # 🐞 關鍵修復：把 ignore_index 移出陣列！
+                    updated_df = pd.concat([df_trades_raw, new_data], ignore_index=True)
                     try:
                         conn.update(data=updated_df)
                         st.cache_data.clear() 
@@ -350,6 +351,13 @@ if st.session_state.analyzed:
             tickers = ["SOXX", "SOXL", "TMF", "BITX"]
             us_data = yf.download(tickers, period="200d", progress=False)
             
+            us_positions = {
+                "SOXL": {"shares": 545, "cost": 50.99},
+                "TMF": {"shares": 1050, "cost": 52.94},
+                "BITX": {"shares": 11, "cost": 29.67}
+            }
+            
+            us_live = {}
             for t in us_positions.keys():
                 try:
                     tkr_us = yf.Ticker(t)
@@ -443,7 +451,7 @@ if st.session_state.analyzed:
         st.subheader("🛬 生命週期投資法 & 退休終局導航")
         st.write("系統已自動抓取你當前的台美股真實市值、現金與信貸，為你推演未來的最佳化降落軌跡。")
         
-        # 1. 算出大分母 (總淨資產 FC)
+        # 1. 算出淨資產 (FC)
         FC_TW = cur_val + cash - (loan1 + loan2)
         FC_US = total_us_val_twd
         FC = FC_TW + FC_US
@@ -454,7 +462,7 @@ if st.session_state.analyzed:
         target_stock_val = W * (target_k / 100.0)
         current_E = (target_stock_val / FC * 100) if FC > 0 else 0
         
-        # 2. 算出大分子 (實質跳動曝險金額)
+        # 2. 算出實質跳動曝險金額
         twd_exposure_val = cur_val * 2
         soxl_val_twd = us_live['SOXL']['curr'] * us_positions['SOXL']['shares'] * usd_twd
         bitx_val_twd = us_live['BITX']['curr'] * us_positions['BITX']['shares'] * usd_twd
@@ -585,5 +593,23 @@ if st.session_state.analyzed:
             })
             
         st.dataframe(pd.DataFrame(records_gp), use_container_width=True, hide_index=True)
+        
+        st.divider()
+        
+        def get_drop_year_str(dy):
+            if dy == 0: 
+                return "現在！(已跌破 200%，代表你已經正式進入降落期)"
+            elif dy is not None: 
+                return f"第 {dy} 年"
+            else: 
+                return "超過 10 年"
+
+        st.markdown("### 🎯 4. 降落時間預測")
+        st.write(f"根據推算，你的最佳曝險度大約會在以下時間點 **正式跌破 200% (啟動平滑降落)**：")
+        st.markdown(f"""
+        * 🟢 **樂觀情境 (10%)：** {get_drop_year_str(drop_year_10)}
+        * 🟡 **正常情境 (8%)：** {get_drop_year_str(drop_year_8)}
+        * 🔴 **保守情境 (6%)：** {get_drop_year_str(drop_year_6)}
+        """)
 
 st.caption("📱 提示：將此網頁「加入主畫面」，它就是你的專屬實戰 App！")
