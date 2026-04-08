@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V4.9 - 報價精準定位版 (透視公式與降落指南版)
+# 賴賴投資戰情室 V4.9 - 報價精準定位版 (透視排版升級)
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
@@ -207,6 +207,19 @@ if st.session_state.analyzed:
                 st.error(f"💡 **盤中行動指令**：\n\n{suggest_buy_action}")
             else:
                 st.info(f"💡 **盤中行動指令**：\n\n{suggest_buy_action}")
+            
+            st.divider()
+            
+            st.subheader("⚖️ 資產再平衡詳細檢視")
+            st.write(f"🔹 **總淨資產 (股+現-債):** NT$ {net_asset:,.0f}")
+            st.write(f"🔹 **目前實際曝險度:** **{current_exposure*100:.2f}%** (目標: {target_exp_pct}%)")
+            
+            if rebalance_diff > 0:
+                st.warning(f"🚨 【曝險過高】應減碼賣出市值： **NT$ {rebalance_diff:,.0f}**")
+            elif rebalance_diff < 0:
+                st.success(f"🟢 【曝險過低】可加碼買進市值： **NT$ {abs(rebalance_diff):,.0f}**")
+            else:
+                st.success("✅ 目前曝險完美符合目標，不需調整。")
 
             st.divider()
 
@@ -461,16 +474,27 @@ if st.session_state.analyzed:
         st.divider()
         
         # 🌟 UI: 分子分母透視表
-        st.markdown("### ⚖️ 2. 實際曝險 vs 應有曝險 (公式透視)")
+        st.markdown("### ⚖️ 2. 實際曝險 vs 應有曝險")
         st.markdown(f"""
-        | 戰區 | 曝險金額 (大分子) | 淨資產 (大分母) | 實際曝險度 |
+        **🔍 實際曝險度計算公式拆解：**
+        * 🏦 **總淨資產 (FC)：** NT$ {FC:,.0f}
+        * 🇹🇼 **台股實質跳動額：** NT$ {twd_exposure_val:,.0f} (00631L市值 × 2倍)
+        * 🇺🇸 **美股實質跳動額：** NT$ {usd_exposure_val:,.0f} (不含避險債券，依槓桿還原)
+        * 🔥 **總實質跳動金額：** NT$ {total_exposure_val:,.0f}
+        """)
+
+        st.markdown(f"""
+        | 戰區 | 曝險金額 | 淨資產 | 實際曝險度 |
         | :--- | :--- | :--- | :--- |
         | **🇹🇼 台股** | NT$ {twd_exposure_val:,.0f} | NT$ {FC_TW:,.0f} | **{actual_twd_E:.1f}%** |
         | **🇺🇸 美股** | NT$ {usd_exposure_val:,.0f} | NT$ {FC_US:,.0f} | **{actual_usd_E:.1f}%** |
         | **🔥 總計** | **NT$ {total_exposure_val:,.0f}** | **NT$ {FC:,.0f}** | **{actual_total_E:.1f}%** |
         """)
 
-        st.metric("🎯 生命週期目標曝險度", f"{current_E:.1f}%", f"與實際差距: {current_E - actual_total_E:+.1f}%")
+        st.write("") # 增加一點排版空間
+        c_tgt, c_act = st.columns(2)
+        c_tgt.metric("🎯 生命週期目標曝險度", f"{current_E:.1f}%")
+        c_act.metric("🔥 現在總曝險度", f"{actual_total_E:.1f}%", f"差距: {actual_total_E - current_E:+.1f}%")
 
         # 🌟 UI: 智能降落/加碼操作指南
         target_exposure_val_from_lifecycle = FC * (current_E / 100.0)
