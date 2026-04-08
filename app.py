@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V4.9 - 報價精準定位版 (明細美化升級)
+# 賴賴投資戰情室 V4.9 - 報價精準定位版 (極限圖表標示版)
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
@@ -114,17 +114,13 @@ if st.session_state.analyzed:
 
             st.divider()
 
-            # ==========================================
-            # 📜 逐筆投資明細表 (最新日期置頂 + 美化版)
-            # ==========================================
+            # --- 📜 逐筆投資明細表 (最新日期置頂 + 美化版) ---
             st.subheader("📜 逐筆投資戰績表")
             with st.expander("點擊展開：檢視每筆子彈的獨立作戰績效", expanded=False):
                 if not df_trades_raw.empty:
                     buy_df = df_trades_raw[df_trades_raw['交易類型'].str.contains('買入', na=False)].copy()
                     if not buy_df.empty:
                         buy_df['成交日期'] = pd.to_datetime(buy_df['成交日期'])
-                        
-                        # 💡 排序魔法：讓最新的日期排在最上面
                         buy_df = buy_df.sort_values(by='成交日期', ascending=False)
                         today_date = pd.to_datetime(datetime.today().date())
                         
@@ -135,7 +131,6 @@ if st.session_state.analyzed:
                             r_shares = float(row['庫存股數'])
                             t_cost = float(row['持有成本'])
                             
-                            # 3/23 分割還原處理
                             if trade_d < split_cutoff and r_price > 100:
                                 adj_p = r_price / 22.0
                                 adj_s = r_shares * 22.0
@@ -143,19 +138,18 @@ if st.session_state.analyzed:
                                 adj_p = r_price
                                 adj_s = r_shares
                             
-                            # 績效計算
                             lot_cur_val = adj_s * current_p
                             lot_pnl = lot_cur_val - t_cost
                             lot_roi = lot_pnl / t_cost if t_cost > 0 else 0
-                            
-                            # 💡 新增：該筆子彈的「今日損益金額」
                             lot_today_pnl = (current_p - yest_close) * adj_s
                             
-                            # 年化計算 (保留你的原汁原味，不加 30 天防呆)
                             days_held = max((today_date - trade_d).days, 1)
-                            ann_roi = (1 + lot_roi) ** (365.0 / days_held) - 1
+                            if days_held < 30:
+                                ann_roi_str = "-"
+                            else:
+                                ann_roi = (1 + lot_roi) ** (365.0 / days_held) - 1
+                                ann_roi_str = f"{ann_roi*100:+.2f}%"
                             
-                            # 加入 emoji 視覺優化欄位
                             records.append({
                                 '📅 日期': trade_d.strftime('%Y-%m-%d'),
                                 '🛒 買價': f"{adj_p:.2f}",
@@ -164,7 +158,7 @@ if st.session_state.analyzed:
                                 '🔥 今日損益': f"{lot_today_pnl:+,.0f}",
                                 '📈 總損益': f"{lot_pnl:+,.0f}",
                                 '🎯 總報酬': f"{lot_roi*100:+.2f}%",
-                                '🚀 年化報酬': f"{ann_roi*100:+.2f}%"
+                                '🚀 年化報酬': ann_roi_str
                             })
                         
                         st.dataframe(pd.DataFrame(records), use_container_width=True, hide_index=True)
@@ -221,17 +215,30 @@ if st.session_state.analyzed:
 
             st.divider()
 
+            # ==========================================
+            # 🌐 戰術圖表分析 (新增極值標示)
+            # ==========================================
             st.subheader("🌐 戰術圖表分析")
             recent_prices = adj_prices[adj_prices.index >= pd.to_datetime('2024-01-01')]
             
+            # --- A. 價格走勢與當前均價防線 ---
             st.write("📈 **A. 價格走勢與當前均價防線**")
             fig1 = go.Figure()
             fig1.add_trace(go.Scatter(x=recent_prices.index, y=recent_prices.values, mode='lines', name='還原股價', line=dict(color='#E71D36', width=2)))
             if avg_cost > 0:
                 fig1.add_hline(y=avg_cost, line_dash="dash", line_color="#00A86B", annotation_text=f"你的均價: {avg_cost:.2f}")
-            fig1.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=10, b=0), height=250)
+            
+            # 💡 標示最大值與最小值
+            if not recent_prices.empty:
+                max_idx, max_val = recent_prices.idxmax(), recent_prices.max()
+                min_idx, min_val = recent_prices.idxmin(), recent_prices.min()
+                fig1.add_annotation(x=max_idx, y=max_val, text=f"高: {max_val:.2f}", showarrow=True, arrowhead=1, ax=0, ay=-30)
+                fig1.add_annotation(x=min_idx, y=min_val, text=f"低: {min_val:.2f}", showarrow=True, arrowhead=1, ax=0, ay=30)
+                
+            fig1.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=35, b=0), height=250)
             st.plotly_chart(fig1, use_container_width=True)
 
+            # --- B. 多空戰略動能圖 (乖離率雙向動能) ---
             st.write("📊 **B. 多空戰略動能圖 (乖離率雙向動能)**")
             ma20 = recent_prices.rolling(window=20).mean()
             bias = (recent_prices - ma20) / ma20 * 100
@@ -241,9 +248,19 @@ if st.session_state.analyzed:
             fig2.add_hline(y=0, line_width=1, line_color="black") 
             for val, color, txt in [(-5, "gray", "標準"), (-10, "orange", "恐慌"), (-15, "red", "重壓")]:
                 fig2.add_hline(y=val, line_dash="dot", line_color=color, annotation_text=txt)
-            fig2.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=10, b=0), height=250, yaxis_title="乖離率 %")
+                
+            # 💡 標示最大值與最小值
+            bias_clean = bias.dropna()
+            if not bias_clean.empty:
+                b_max_idx, b_max_val = bias_clean.idxmax(), bias_clean.max()
+                b_min_idx, b_min_val = bias_clean.idxmin(), bias_clean.min()
+                fig2.add_annotation(x=b_max_idx, y=b_max_val, text=f"最高: {b_max_val:.1f}%", showarrow=True, arrowhead=1, ax=0, ay=-30)
+                fig2.add_annotation(x=b_min_idx, y=b_min_val, text=f"最低: {b_min_val:.1f}%", showarrow=True, arrowhead=1, ax=0, ay=30)
+
+            fig2.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=35, b=0), height=250, yaxis_title="乖離率 %")
             st.plotly_chart(fig2, use_container_width=True)
 
+            # --- C. 庫存損益率歷史真實軌跡 ---
             st.write("💰 **C. 庫存損益率歷史真實軌跡**")
             if not temp_df.empty:
                 trade_history = temp_df.copy()
@@ -269,8 +286,19 @@ if st.session_state.analyzed:
                 fig3.add_hline(y=0, line_width=2, line_color="black") 
                 fig3.add_hrect(y0=0, y1=max(max_val, 10)+5, fillcolor="green", opacity=0.1, layer="below", line_width=0)
                 fig3.add_hrect(y0=min(min_val, -10)-5, y1=0, fillcolor="red", opacity=0.1, layer="below", line_width=0)
-                fig3.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=10, b=0), height=250, yaxis_title="真實損益 %")
+                
+                # 💡 標示最大值與最小值
+                pnl_clean = recent_pnl_pct.dropna()
+                if not pnl_clean.empty and (max_val != 0 or min_val != 0):
+                    p_max_idx, p_max_val = pnl_clean.idxmax(), pnl_clean.max()
+                    p_min_idx, p_min_val = pnl_clean.idxmin(), pnl_clean.min()
+                    fig3.add_annotation(x=p_max_idx, y=p_max_val, text=f"最高: {p_max_val:.1f}%", showarrow=True, arrowhead=1, ax=0, ay=-30)
+                    fig3.add_annotation(x=p_min_idx, y=p_min_val, text=f"最低: {p_min_val:.1f}%", showarrow=True, arrowhead=1, ax=0, ay=30)
+
+                fig3.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=35, b=0), height=250, yaxis_title="真實損益 %")
                 st.plotly_chart(fig3, use_container_width=True)
+            else:
+                st.info("尚無足夠的歷史交易紀錄，無法繪製真實損益軌跡。")
 
         st.divider()
         st.subheader("📝 新增交易紀錄 (同步至 Google 試算表)")
