@@ -7,11 +7,11 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V8.6 - 細節打磨版
+# 賴賴投資戰情室 V8.7 - 極簡記帳版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="💰", layout="wide")
-st.title("🛡️ 賴賴投資戰情室 V8.6")
+st.title("🛡️ 賴賴投資戰情室 V8.7")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -181,26 +181,9 @@ if st.session_state.analyzed:
                     })
                 st.dataframe(pd.DataFrame(recs_tw), use_container_width=True, hide_index=True)
 
-        with st.expander("🛒 新增台股交易紀錄", expanded=False):
-            st.warning("⚠️ **Google API 限制提醒：** 若未綁定系統金鑰將無法寫入。若寫入失敗，請直接點擊下方按鈕跳轉至試算表填寫。")
-            col_a, col_b = st.columns(2); tw_date = col_a.date_input("成交日期", key='tw_d'); tw_type = col_b.selectbox("交易類型", ["現股買入", "現股賣出"], key='tw_t')
-            col_c, col_d = st.columns(2); tw_price = col_c.number_input("成交價格", key='tw_p', min_value=0.0); tw_shares = col_d.number_input("股數", key='tw_s', min_value=0)
-            tw_fee = st.number_input("手續費", value=0, key='tw_f')
-            pre_cost = (tw_price * tw_shares) + tw_fee
-            st.info(f"💰 本次交易總成本：**NT$ {pre_cost:,.0f}**")
-            
-            c_btn1, c_btn2 = st.columns(2)
-            with c_btn1:
-                if st.button("🚀 嘗試寫入雲端", use_container_width=True) and tw_shares > 0:
-                    try:
-                        new_data = pd.DataFrame([{"成交日期": tw_date.strftime("%Y-%m-%d"), "交易類型": tw_type, "成交價格": tw_price, "庫存股數": tw_shares, "手續費": tw_fee, "持有成本": pre_cost}])
-                        updated_tw = pd.concat([df_tw_raw, new_data], ignore_index=True)
-                        conn.update(spreadsheet=SHEET_TW, data=updated_tw)
-                        st.success("✅ 寫入成功！")
-                    except:
-                        st.error("寫入失敗，請使用右方按鈕前往手動填寫。")
-            with c_btn2:
-                st.link_button("👉 直接開啟 Google Sheets 手動填寫", SHEET_TW, use_container_width=True)
+        # 🌟 一鍵跳轉：台股記帳
+        st.write("---")
+        st.link_button("🛒 新增台股交易紀錄 (直接開啟 Google Sheets 手動填寫)", SHEET_TW, use_container_width=True)
 
         st.subheader("🌐 戰術圖表分析")
         hist_tw_data = yf.download(TICKER_TW, period="max", progress=False)['Close']
@@ -314,26 +297,9 @@ if st.session_state.analyzed:
             })
         st.dataframe(pd.DataFrame(us_table), use_container_width=True, hide_index=True)
 
-        with st.expander("🛒 新增美股交易紀錄", expanded=False):
-            st.warning("⚠️ **Google API 限制：** 若未綁定系統金鑰將無法寫入。若寫入失敗，請直接點擊下方按鈕跳轉至試算表填寫。")
-            c_ua, c_ub = st.columns(2); us_date = c_ua.date_input("成交日期", key='u_d'); us_type = c_ub.selectbox("交易類型", ["現股買入", "現股賣出"], key='u_t')
-            c_uc, c_ud = st.columns(2); us_tk = c_uc.text_input("股票代號", key='u_tk'); us_pr = c_ud.number_input("成交價格", key='u_p')
-            c_ue, c_uf = st.columns(2); us_sh = c_ue.number_input("股數", key='u_s', min_value=0); us_fe = c_uf.number_input("手續費(USD)", key='u_f')
-            pre_cost_us = (us_pr*us_sh)+us_fe
-            st.info(f"💰 預估美股成本：**US$ {pre_cost_us:,.2f}**")
-            
-            c_btn3, c_btn4 = st.columns(2)
-            with c_btn3:
-                if st.button("🚀 嘗試寫入美股", use_container_width=True) and us_sh > 0:
-                    try:
-                        new_us = pd.DataFrame([{"成交日期": us_date.strftime("%Y-%m-%d"), "股票代號": us_tk.upper(), "交易類型": us_type, "成交價格": us_pr, "庫存股數": us_sh, "手續費": us_fe, "持有成本": pre_cost_us}])
-                        updated_us = pd.concat([df_us_raw, new_us], ignore_index=True)
-                        conn.update(spreadsheet=SHEET_US, data=updated_us)
-                        st.success("✅ 美股紀錄上傳成功！")
-                    except:
-                        st.error("寫入失敗，請使用右方按鈕前往手動填寫。")
-            with c_btn4:
-                st.link_button("👉 直接開啟 Google Sheets 手動填寫", SHEET_US, use_container_width=True)
+        # 🌟 一鍵跳轉：美股記帳
+        st.write("---")
+        st.link_button("🛒 新增美股交易紀錄 (直接開啟 Google Sheets 手動填寫)", SHEET_US, use_container_width=True)
 
     # ------------------------------------------
     # 🛬 Tab 3: 生命周期 & 退休
@@ -394,4 +360,4 @@ if st.session_state.analyzed:
                 gp.append({"年": f"第 {y} 年", "預估資產(萬)": f"{curr_f/10000:,.0f}", "應有曝險": f"{e_g:.1f}%"})
             st.table(pd.DataFrame(gp))
 
-st.caption("📱 提示：為相容多數系統，已使用通用圖示取代國旗。美股損益明細已新增實際金額對照。")
+st.caption("📱 提示：點擊下方按鈕可直接跳轉至試算表新增交易紀錄。版面極簡化。")
