@@ -7,11 +7,11 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V6.2 - 信貸期數精準校正版
+# 賴賴投資戰情室 V6.3 - 圖表除蟲穩固版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
-st.title("🛡️ 賴賴投資戰情室 V6.2")
+st.title("🛡️ 賴賴投資戰情室 V6.3")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -30,7 +30,7 @@ def calculate_loan_remaining(principal, annual_rate, years, start_date):
     # 計算跨越的月份差
     passed_months = (today.year - start_date.year) * 12 + (today.month - start_date.month)
     
-    # 🌟 關鍵修復：只要今天的號碼 ≥ 扣款日，代表本月已扣款，期數直接 +1 (包含首次扣款那個月)
+    # 只要今天的號碼 ≥ 扣款日，代表本月已扣款，期數直接 +1
     if today.day >= start_date.day:
         passed_months += 1
         
@@ -187,7 +187,13 @@ if st.session_state.analyzed:
         st.divider()
         st.subheader("🌐 戰術圖表分析")
         hist_tw = yf.download(TICKER, period="max", progress=False)
-        hist_p = hist_tw['Close'].dropna()
+        
+        # 🌟 強制降維除蟲：確保抓出的 Close 資料是一維 Series
+        if isinstance(hist_tw.columns, pd.MultiIndex):
+            hist_p = hist_tw['Close'][TICKER].dropna()
+        else:
+            hist_p = hist_tw['Close'].dropna()
+            
         adj_p = hist_p.copy()
         mask = (adj_p.index < split_cutoff) & (adj_p > 100)
         if mask.any(): adj_p.loc[mask] = adj_p.loc[mask] / 22.0
@@ -206,9 +212,17 @@ if st.session_state.analyzed:
     with tab2:
         st.subheader("🎯 1. 大盤趨勢與輪動階梯")
         soxx_data = yf.download("SOXX", period="200d", progress=False)
-        soxx_c = soxx_data['Close'].dropna(); dma100 = soxx_c.rolling(100).mean()
+        
+        # 🌟 強制降維除蟲：確保 SOXX 是一維 Series
+        if isinstance(soxx_data.columns, pd.MultiIndex):
+            soxx_c = soxx_data['Close']['SOXX'].dropna()
+        else:
+            soxx_c = soxx_data['Close'].dropna()
+            
+        dma100 = soxx_c.rolling(100).mean()
         curr_soxx = float(yf.Ticker("SOXX").fast_info.last_price)
         diff = curr_soxx - dma100.iloc[-1]; diff_p = (curr_soxx/dma100.iloc[-1]-1)*100
+        
         if curr_soxx > dma100.iloc[-1]: st.success(f"🟢 **SOXX 多頭續抱** | 現價:{curr_soxx:.2f} (100DMA:{dma100.iloc[-1]:.2f} | 差距: +{diff:.2f} / +{diff_p:.2f}%)")
         else: st.error(f"🔴 **停利訊號觸發** | 現價:{curr_soxx:.2f} (100DMA:{dma100.iloc[-1]:.2f} | 差距: {diff:.2f} / {diff_p:.2f}%)")
         
@@ -270,4 +284,4 @@ if st.session_state.analyzed:
             records_gp.append({"第幾年": f"第 {y} 年" if y > 0 else "現在 (第0年)","預估 FC (8%)": f"{f8/10000:,.0f} 萬","應有曝險(8%)": f"{e8:.1f}%","保守(6%)": f"{e6:.1f}%","樂觀(10%)": f"{e10:.1f}%"})
         st.dataframe(pd.DataFrame(records_gp), use_container_width=True, hide_index=True)
 
-st.caption("📱 提示：信貸期數引擎已修正。台美雙引擎透視表現以「萬」為單位顯示，版面更直覺乾淨。")
+st.caption("📱 提示：已修復 yfinance 圖表降維 Bug，確保三大圖表極值正常顯示。")
