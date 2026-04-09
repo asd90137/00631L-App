@@ -7,21 +7,73 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V6.0 - 完美除蟲最終版
+# 賴賴投資戰情室 V6.1 - 債務自動遞減與單位優化版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
-st.title("🛡️ 賴賴投資戰情室 V6.0")
+st.title("🛡️ 賴賴投資戰情室 V6.1")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
 
+# --- 🏦 定義信貸自動攤還計算函數 ---
+def calculate_loan_remaining(principal, annual_rate, years, start_date):
+    if principal <= 0 or years <= 0:
+        return 0, 0
+    r = annual_rate / 100 / 12
+    N = years * 12
+    # 計算每月應繳本息金額 (PMT)
+    pmt = principal * r * (1+r)**N / ((1+r)**N - 1) if r > 0 else principal / N
+    
+    today = datetime.today().date()
+    # 計算已經繳了幾期
+    passed_months = (today.year - start_date.year) * 12 + (today.month - start_date.month)
+    if today.day < start_date.day: 
+        passed_months -= 1 # 本月還沒到扣款日
+        
+    passed_months = max(0, min(passed_months, N)) # 確保期數在 0 ~ N 之間
+    
+    # 計算剩餘本金餘額
+    if r > 0:
+        rem_balance = principal * ((1+r)**N - (1+r)**passed_months) / ((1+r)**N - 1)
+    else:
+        rem_balance = principal - (pmt * passed_months)
+        
+    return max(0, rem_balance), pmt
+
+# --- 側邊欄參數設定 ---
 st.sidebar.header("⚙️ 資金與曝險參數")
-loan1 = st.sidebar.number_input("1. 信貸一剩餘本金", value=2056231)
-loan2 = st.sidebar.number_input("2. 信貸二剩餘本金", value=935907)
-base_m = st.sidebar.number_input("3. 基準每月定期定額", value=100000)
-cash = st.sidebar.number_input("4. 目前帳戶可用現金", value=2000000)
-target_exp_pct = st.sidebar.number_input("5. 設定目標曝險度 (%)", value=200)
+
+# 🌟 單位優化：改為「萬」
+base_m_wan = st.sidebar.number_input("1. 基準每月定期定額 (萬)", value=10.0, step=1.0)
+cash_wan = st.sidebar.number_input("2. 目前帳戶可用現金 (萬)", value=200.0, step=10.0)
+target_exp_pct = st.sidebar.number_input("3. 設定目標曝險度 (%)", value=200)
+
+# 將「萬」還原為實際金額供後續計算
+base_m = base_m_wan * 10000
+cash = cash_wan * 10000
+
+# 🌟 新增：信貸自動扣款設定器 (藏在展開選單中保持版面乾淨)
+with st.sidebar.expander("🏦 信貸自動扣款設定 (自動計算餘額)", expanded=False):
+    st.caption("設定一次，系統將每月自動扣除你的本金欠款！")
+    
+    st.markdown("**🔹 信貸一**")
+    l1_p = st.number_input("原始貸款總額", value=2200000, step=100000, key='l1p')
+    l1_r = st.number_input("年利率 (%)", value=2.5, step=0.1, key='l1r')
+    l1_y = st.number_input("貸款期數 (年)", value=7, step=1, key='l1y')
+    l1_d = st.date_input("首次扣款日", datetime(2024, 1, 15), key='l1d')
+    loan1, pmt1 = calculate_loan_remaining(l1_p, l1_r, l1_y, l1_d)
+    st.info(f"💡 目前剩餘本金：**NT$ {loan1:,.0f}**\n\n(每月扣繳 NT$ {pmt1:,.0f})")
+
+    st.divider()
+    
+    st.markdown("**🔹 信貸二**")
+    l2_p = st.number_input("原始貸款總額", value=1000000, step=100000, key='l2p')
+    l2_r = st.number_input("年利率 (%)", value=2.5, step=0.1, key='l2r')
+    l2_y = st.number_input("貸款期數 (年)", value=7, step=1, key='l2y')
+    l2_d = st.date_input("首次扣款日", datetime(2024, 1, 15), key='l2d')
+    loan2, pmt2 = calculate_loan_remaining(l2_p, l2_r, l2_y, l2_d)
+    st.info(f"💡 目前剩餘本金：**NT$ {loan2:,.0f}**\n\n(每月扣繳 NT$ {pmt2:,.0f})")
 
 st.sidebar.divider()
 st.sidebar.header("⚙️ 生命週期與退休規劃")
@@ -36,29 +88,31 @@ withdrawal_rate_in = st.sidebar.number_input("11. 安全提領率 (%)", value=4.
 inflation_rate = inflation_rate_in / 100.0
 withdrawal_rate = withdrawal_rate_in / 100.0
 
+# --- 數據同步 ---
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
     df_trades_raw = conn.read(ttl=0) 
-    
     temp_df = df_trades_raw.copy()
     temp_df['成交日期'] = pd.to_datetime(temp_df['成交日期'])
     temp_df.loc[temp_df['交易類型'].str.contains('賣出', na=False), '庫存股數'] = -temp_df['庫存股數'].abs()
     temp_df.loc[temp_df['交易類型'].str.contains('賣出', na=False), '持有成本'] = -temp_df['持有成本'].abs()
-    
     actual_shares = temp_df['庫存股數'].sum()
     actual_cost = temp_df['持有成本'].sum()
     st.sidebar.success("✅ 台股資料同步成功！")
 except Exception as e:
     st.sidebar.error("❌ 台股資料讀取失敗。")
-    df_trades_raw = pd.DataFrame()
-    actual_shares, actual_cost = 0, 0
+    df_trades_raw = pd.DataFrame(); actual_shares, actual_cost = 0, 0
 
 if st.button("🚀 啟動戰情室全面掃描", use_container_width=True):
     st.session_state.analyzed = True
 
+# ==========================================
+# 分頁實作
+# ==========================================
 tab1, tab2, tab3 = st.tabs(["🇹🇼 台股 00631L", "🇺🇸 美股狙擊系統", "🛬 生命周期與退休"])
 
 if st.session_state.analyzed:
+    # 預先宣告變數
     cur_val = 0
     total_us_val_twd = 0
     us_live = {}
@@ -68,9 +122,9 @@ if st.session_state.analyzed:
         "BITX": {"shares": 11, "cost": 29.67}
     }
 
-    # ==========================================
+    # ------------------------------------------
     # 🇹🇼 分頁一：台股 00631L
-    # ==========================================
+    # ------------------------------------------
     with tab1:
         with st.spinner('📡 抓取即時數據與歷史運算中...'):
             TICKER = "00631L.TW"
@@ -334,7 +388,7 @@ if st.session_state.analyzed:
                         "庫存股數": trade_shares, "手續費": trade_fee,
                         "持有成本": preview_cost, "損益試算": 0, "報酬率": "0.00%" 
                     }])
-                    # 🐞 關鍵修復：把 ignore_index 移出陣列！
+                    # 徹底除蟲：將參數拉出陣列
                     updated_df = pd.concat([df_trades_raw, new_data], ignore_index=True)
                     try:
                         conn.update(data=updated_df)
@@ -343,21 +397,14 @@ if st.session_state.analyzed:
                     except Exception as e:
                         st.error(f"❌ 寫入失敗。({e})")
 
-    # ==========================================
+    # ------------------------------------------
     # 🇺🇸 分頁二：美股狙擊系統
-    # ==========================================
+    # ------------------------------------------
     with tab2:
         with st.spinner('📡 抓取美股數據中...'):
             tickers = ["SOXX", "SOXL", "TMF", "BITX"]
             us_data = yf.download(tickers, period="200d", progress=False)
             
-            us_positions = {
-                "SOXL": {"shares": 545, "cost": 50.99},
-                "TMF": {"shares": 1050, "cost": 52.94},
-                "BITX": {"shares": 11, "cost": 29.67}
-            }
-            
-            us_live = {}
             for t in us_positions.keys():
                 try:
                     tkr_us = yf.Ticker(t)
@@ -444,14 +491,14 @@ if st.session_state.analyzed:
                 st.write(f"🔹 **庫存股數:** {shares:,.0f} 股 ｜ **總市值:** ${cur_val_us:,.2f}")
                 st.markdown("---")
 
-    # ==========================================
+    # ------------------------------------------
     # 🛬 分頁三：生命週期降落軌跡與退休導航
-    # ==========================================
+    # ------------------------------------------
     with tab3:
         st.subheader("🛬 生命週期投資法 & 退休終局導航")
         st.write("系統已自動抓取你當前的台美股真實市值、現金與信貸，為你推演未來的最佳化降落軌跡。")
         
-        # 1. 算出淨資產 (FC)
+        # 1. 算出大分母 (總淨資產 FC)
         FC_TW = cur_val + cash - (loan1 + loan2)
         FC_US = total_us_val_twd
         FC = FC_TW + FC_US
@@ -462,7 +509,7 @@ if st.session_state.analyzed:
         target_stock_val = W * (target_k / 100.0)
         current_E = (target_stock_val / FC * 100) if FC > 0 else 0
         
-        # 2. 算出實質跳動曝險金額
+        # 2. 算出大分子 (實質跳動曝險金額)
         twd_exposure_val = cur_val * 2
         soxl_val_twd = us_live['SOXL']['curr'] * us_positions['SOXL']['shares'] * usd_twd
         bitx_val_twd = us_live['BITX']['curr'] * us_positions['BITX']['shares'] * usd_twd
