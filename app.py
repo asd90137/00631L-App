@@ -33,7 +33,7 @@ def calculate_loan_remaining(principal, annual_rate, years, start_date):
 st.sidebar.header("⚙️ 資金與曝險參數")
 base_m_wan = st.sidebar.number_input("1. 基準每月定期定額 (萬)", value=10.0, step=1.0)
 cash_wan = st.sidebar.number_input("2. 目前帳戶可用現金 (萬)", value=200.0, step=10.0)
-us_cash_usd = st.sidebar.number_input("3. 美股可用現金 (USD)", value=0.0, step=100.0)
+us_cash_usd = st.sidebar.number_input("3. 美股可用現金 (USD)", value=235.73, step=100.0)
 target_exp_pct = st.sidebar.number_input("4. 設定目標曝險度 (%)", value=200)
 
 base_m = base_m_wan * 10000
