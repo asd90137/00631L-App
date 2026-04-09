@@ -40,7 +40,7 @@ base_m = base_m_wan * 10000
 cash = cash_wan * 10000
 
 with st.sidebar.expander("🏦 貸款細項設定 (自動連動)", expanded=False):
-    l1_p = st.number_input("信貸一總額", value=2200000); l1_r = st.number_input("年利率1(%)", value=2.5); l1_d = st.date_input("首次扣款日1", datetime(2024, 1, 15))
+    l1_p = st.number_input("信貸一總額", value=2830000); l1_r = st.number_input("年利率1(%)", value=2.28); l1_d = st.date_input("首次扣款日1", datetime(2024, 1, 15))
     loan1, pmt1 = calculate_loan_remaining(l1_p, l1_r, 7, l1_d)
     st.info(f"貸1剩餘：{loan1/10000:.1f}萬")
     st.divider()
