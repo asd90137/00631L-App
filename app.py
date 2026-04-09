@@ -7,11 +7,11 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V8.5 - 視覺戰神終極版
+# 賴賴投資戰情室 V8.6 - 細節打磨版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="wide")
-st.title("🛡️ 賴賴投資戰情室 V8.5")
+st.title("🛡️ 賴賴投資戰情室 V8.6")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -123,20 +123,18 @@ if st.session_state.analyzed:
         total_us_cost_usd += cost
         
     total_us_val_twd = (total_us_val_usd + us_cash_usd) * usd_twd
-    # FC 淨資產加入美股現金
     FC = cur_val_tw + total_us_val_twd + cash - (loan1 + loan2)
 
-    tab1, tab2, tab3 = st.tabs(["🇹🇼 TW台股", "🇺🇸 US美股", "🛬 生命周期 & 退休"])
+    tab1, tab2, tab3 = st.tabs(["💰 台股", "💵 美股", "🛬 生命周期 & 退休"])
 
     # ------------------------------------------
-    # 🇹🇼 Tab 1: 台股
+    # 📈 Tab 1: 台股
     # ------------------------------------------
     with tab1:
         roi_tw = (cur_val_tw / actual_cost_tw - 1) if actual_cost_tw > 0 else 0
         days_tw = max((datetime.today() - min_date_tw).days, 1) if pd.notnull(min_date_tw) else 1
         ann_roi_tw = ((1+roi_tw)**(365/days_tw) - 1) * 100
         
-        # 10大指標完美對稱 (佔比移走)
         c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("總市值", f"NT$ {cur_val_tw:,.0f}")
         c2.metric("總投入成本", f"NT$ {actual_cost_tw:,.0f}")
@@ -151,18 +149,19 @@ if st.session_state.analyzed:
         c9.metric("目前現價", f"{p_tw_curr:.2f}")
         c10.metric("年化報酬率", f"{ann_roi_tw:+.2f}%")
 
-        # 圓餅圖：加入貨幣顯示與負債
         st.write("---")
-        st.write("📈 **台幣資產配置比例 (含負債對照)**")
-        fig_p = go.Figure(data=[go.Pie(
-            labels=['00631L 市值', '可用現金', '信貸總餘額 (負債)'], 
-            values=[cur_val_tw, cash, loan1+loan2], 
-            hole=.4, 
-            texttemplate='%{label}<br>NT$ %{value:,.0f}<br>%{percent}',
-            marker_colors=['#E71D36', '#2EC4B6', '#5C5C5C']
-        )])
-        fig_p.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0))
-        st.plotly_chart(fig_p, use_container_width=True)
+        col_p, col_d = st.columns([2, 1])
+        with col_p:
+            st.write("📈 **台幣資產配置比例 (含負債對照)**")
+            fig_p = go.Figure(data=[go.Pie(
+                labels=['00631L 市值', '可用現金', '信貸總餘額 (負債)'], 
+                values=[cur_val_tw, cash, loan1+loan2], 
+                hole=.4, 
+                texttemplate='%{label}<br>NT$ %{value:,.0f}<br>%{percent}',
+                marker_colors=['#E71D36', '#2EC4B6', '#5C5C5C']
+            )])
+            fig_p.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0))
+            st.plotly_chart(fig_p, use_container_width=True)
 
         with st.expander(f"📜 逐筆投資戰績表 (目前現價: {p_tw_curr:.2f})", expanded=False):
             if not df_tw_raw.empty:
@@ -183,8 +182,25 @@ if st.session_state.analyzed:
                 st.dataframe(pd.DataFrame(recs_tw), use_container_width=True, hide_index=True)
 
         with st.expander("🛒 新增台股交易紀錄", expanded=False):
-            st.link_button("👉 點擊開啟 Google Sheets 填寫紀錄", SHEET_TW)
-            st.caption("※ 填寫完成後回到此頁面，點擊最上方的『啟動戰略掃描』即可更新數據。")
+            st.warning("⚠️ **Google API 限制提醒：** 若未綁定系統金鑰將無法寫入。若寫入失敗，請直接點擊下方按鈕跳轉至試算表填寫。")
+            col_a, col_b = st.columns(2); tw_date = col_a.date_input("成交日期", key='tw_d'); tw_type = col_b.selectbox("交易類型", ["現股買入", "現股賣出"], key='tw_t')
+            col_c, col_d = st.columns(2); tw_price = col_c.number_input("成交價格", key='tw_p', min_value=0.0); tw_shares = col_d.number_input("股數", key='tw_s', min_value=0)
+            tw_fee = st.number_input("手續費", value=0, key='tw_f')
+            pre_cost = (tw_price * tw_shares) + tw_fee
+            st.info(f"💰 本次交易總成本：**NT$ {pre_cost:,.0f}**")
+            
+            c_btn1, c_btn2 = st.columns(2)
+            with c_btn1:
+                if st.button("🚀 嘗試寫入雲端", use_container_width=True) and tw_shares > 0:
+                    try:
+                        new_data = pd.DataFrame([{"成交日期": tw_date.strftime("%Y-%m-%d"), "交易類型": tw_type, "成交價格": tw_price, "庫存股數": tw_shares, "手續費": tw_fee, "持有成本": pre_cost}])
+                        updated_tw = pd.concat([df_tw_raw, new_data], ignore_index=True)
+                        conn.update(spreadsheet=SHEET_TW, data=updated_tw)
+                        st.success("✅ 寫入成功！")
+                    except:
+                        st.error("寫入失敗，請使用右方按鈕前往手動填寫。")
+            with c_btn2:
+                st.link_button("👉 直接開啟 Google Sheets 手動填寫", SHEET_TW, use_container_width=True)
 
         st.subheader("🌐 戰術圖表分析")
         hist_tw_data = yf.download(TICKER_TW, period="max", progress=False)['Close']
@@ -192,13 +208,12 @@ if st.session_state.analyzed:
         adj_h = hist_tw_data.copy()
         adj_h.loc[adj_h.index < split_cutoff] /= 22.0
         
-        # 從投資第一天開始畫
         start_date = min_date_tw if pd.notnull(min_date_tw) else pd.to_datetime('2024-01-01')
         rp = adj_h[adj_h.index >= start_date]
         
         if not rp.dropna().empty:
             avg_cost = actual_cost_tw / actual_shares_tw if actual_shares_tw > 0 else 0
-            # 圖 A：價格與均價 (加色塊)
+            # 圖 A
             st.write("📈 **A. 價格走勢與還原均價**")
             fig1 = go.Figure(); fig1.add_trace(go.Scatter(x=rp.index, y=rp.values, name="還原價", line=dict(color='#E71D36')))
             mx, mi, lt = rp.max(), rp.min(), rp.dropna().iloc[-1]
@@ -210,7 +225,7 @@ if st.session_state.analyzed:
             fig1.add_annotation(x=rp.idxmax(), y=mx, text=f"高:{mx:.2f}", showarrow=True, ay=-30); fig1.add_annotation(x=rp.idxmin(), y=mi, text=f"低:{mi:.2f}", showarrow=True, ay=30); fig1.add_annotation(x=rp.index[-1], y=lt, text=f"最新:{lt:.2f}", showarrow=True, ax=40)
             fig1.update_yaxes(range=[min(mi*0.9, avg_cost*0.9), max(mx*1.1, avg_cost*1.1)]); st.plotly_chart(fig1, use_container_width=True)
             
-            # 圖 B：乖離率 (加色塊)
+            # 圖 B
             st.write("📊 **B. 多空戰術乖離率**")
             bias = (rp - rp.rolling(20).mean())/rp.rolling(20).mean()*100
             fig2 = go.Figure(); fig2.add_trace(go.Scatter(x=bias.index, y=bias.values, name="乖離%", line=dict(color='#F4A261')))
@@ -223,7 +238,7 @@ if st.session_state.analyzed:
                 fig2.add_annotation(x=bc.idxmax(), y=bx, text=f"最高:{bx:.1f}%", showarrow=True, ay=-30); fig2.add_annotation(x=bc.idxmin(), y=bi, text=f"最低:{bi:.1f}%", showarrow=True, ay=30); fig2.add_annotation(x=bc.index[-1], y=bl, text=f"最新:{bl:.1f}%", showarrow=True, ax=40)
                 fig2.update_yaxes(range=[min(bi*1.2, -20), max(bx*1.2, 15)]); st.plotly_chart(fig2, use_container_width=True)
 
-            # 圖 C：損益軌跡 (加色塊)
+            # 圖 C
             st.write("💰 **C. 庫存真實損益軌跡**")
             if not temp_tw.empty:
                 th = temp_tw.groupby('成交日期')[['庫存股數', '持有成本']].sum().reset_index().set_index('成交日期')
@@ -240,7 +255,7 @@ if st.session_state.analyzed:
                     fig3.update_yaxes(range=[min(pi*1.2, -15), max(px*1.2, 20)]); st.plotly_chart(fig3, use_container_width=True)
 
     # ------------------------------------------
-    # 🇺🇸 Tab 2: 美股 
+    # 🦅 Tab 2: 美股 
     # ------------------------------------------
     with tab2:
         s_c = float(us_data['Close']['SOXX'].iloc[-1]); s_d = us_data['Close']['SOXX'].rolling(100).mean().iloc[-1]
@@ -251,7 +266,8 @@ if st.session_state.analyzed:
         st.info(f"💡 **預估 SOXL 壓力位：** 若 SOXX 跌回 100DMA，SOXL 預計來到 **${soxl_pred:.2f}** (距現值 {((soxl_pred/soxl_c-1)*100):.1f}%)")
         cols = st.columns(3)
         for i, (l, t) in enumerate(zip([3,4,5], [30.14, 21.09, 14.77])):
-            cols[i].metric(f"階梯 {l} 目標", f"${t}", f"距 {((soxl_c/t-1)*100):.1f}%", delta_color="inverse")
+            dist = (soxl_c/t - 1)*100
+            cols[i].metric(f"階梯 {l} 目標", f"${t}", f"距 {dist:.1f}%", delta_color="inverse")
         st.divider()
         
         us_roi = (total_us_val_usd / total_us_cost_usd - 1) if total_us_cost_usd > 0 else 0
@@ -264,17 +280,15 @@ if st.session_state.analyzed:
         today_pct_us = (total_today_pnl_usd / total_yest_val_usd) if total_yest_val_usd > 0 else 0
         exp_us_usd = us_live['SOXL']['curr']*us_live['SOXL']['shares']*3 + us_live['BITX']['curr']*us_live['BITX']['shares']*2
 
-        # 美股 5 大指標
         u1, u2, u3, u4, u5 = st.columns(5)
-        u1.metric("總市值 (USD)", f"${total_us_val_usd:,.0f}")
-        u2.metric("總投入成本", f"${total_us_cost_usd:,.0f}")
-        u3.metric("未實現總損益", f"{(total_us_val_usd-total_us_cost_usd):+,.0f}", f"{us_roi*100:+.2f}%")
-        u4.metric("今日損益", f"${total_today_pnl_usd:+,.0f}", f"{today_pct_us*100:+.2f}%")
+        u1.metric("總市值 (USD)", f"${total_us_val_usd:,.2f}")
+        u2.metric("總投入成本", f"${total_us_cost_usd:,.2f}")
+        u3.metric("未實現總損益", f"{(total_us_val_usd-total_us_cost_usd):+,.2f}", f"{us_roi*100:+.2f}%")
+        u4.metric("今日損益", f"${total_today_pnl_usd:+,.2f}", f"{today_pct_us*100:+.2f}%")
         u5.metric("實際曝險度", f"{(exp_us_usd*usd_twd/FC*100):.1f}%")
         
-        # 美股圓餅圖
         st.write("---")
-        st.write("📈 **美股資產配置比例**")
+        st.write("📈 **美金資產配置比例 (USD)**")
         us_labels = list(us_live.keys()) + ['美股可用現金']
         us_values = [info['curr']*info['shares'] for info in us_live.values()] + [us_cash_usd]
         fig_u = go.Figure(data=[go.Pie(labels=us_labels, values=us_values, hole=.4, texttemplate='%{label}<br>$%{value:,.0f}<br>%{percent}')])
@@ -288,11 +302,38 @@ if st.session_state.analyzed:
             l_roi = (info['curr']/avg - 1) if avg>0 else 0
             days = (datetime.today()-info['first_date']).days if pd.notnull(info['first_date']) else 1
             l_ann = ((1+l_roi)**(365/max(days,1))-1)*100
-            us_table.append({'代號': t, '股數': f"{info['shares']:,.0f}", '均價': f"${avg:.2f}", '成本': f"${info['cost']:,.0f}", '昨日收盤': f"${info['yest']:.2f}", '目前現價': f"${info['curr']:.2f}", '今日損益': f"{(info['curr']/info['yest']-1)*100:+.2f}%" if info['yest']>0 else "0%", '總損益': f"{l_roi*100:+.1f}%", '年化報酬': f"{l_ann:+.1f}%"})
+            
+            today_pnl_abs = (info['curr'] - info['yest']) * info['shares']
+            total_pnl_abs = (info['curr'] - avg) * info['shares']
+            
+            us_table.append({
+                '代號': t, '股數': f"{info['shares']:,.0f}", '均價': f"${avg:.2f}", '成本': f"${info['cost']:,.0f}",
+                '昨日收盤': f"${info['yest']:.2f}", '目前現價': f"${info['curr']:.2f}", 
+                '今日損益': f"${today_pnl_abs:+,.2f} ({(info['curr']/info['yest']-1)*100:+.2f}%)" if info['yest']>0 else "$0 (0.00%)", 
+                '總損益': f"${total_pnl_abs:+,.2f} ({l_roi*100:+.2f}%)", '年化報酬': f"{l_ann:+.2f}%"
+            })
         st.dataframe(pd.DataFrame(us_table), use_container_width=True, hide_index=True)
 
         with st.expander("🛒 新增美股交易紀錄", expanded=False):
-            st.link_button("👉 點擊開啟 Google Sheets 填寫紀錄", SHEET_US)
+            st.warning("⚠️ **Google API 限制：** 若未綁定系統金鑰將無法寫入。若寫入失敗，請直接點擊下方按鈕跳轉至試算表填寫。")
+            c_ua, c_ub = st.columns(2); us_date = c_ua.date_input("成交日期", key='u_d'); us_type = c_ub.selectbox("交易類型", ["現股買入", "現股賣出"], key='u_t')
+            c_uc, c_ud = st.columns(2); us_tk = c_uc.text_input("股票代號", key='u_tk'); us_pr = c_ud.number_input("成交價格", key='u_p')
+            c_ue, c_uf = st.columns(2); us_sh = c_ue.number_input("股數", key='u_s', min_value=0); us_fe = c_uf.number_input("手續費(USD)", key='u_f')
+            pre_cost_us = (us_pr*us_sh)+us_fe
+            st.info(f"💰 預估美股成本：**US$ {pre_cost_us:,.2f}**")
+            
+            c_btn3, c_btn4 = st.columns(2)
+            with c_btn3:
+                if st.button("🚀 嘗試寫入美股", use_container_width=True) and us_sh > 0:
+                    try:
+                        new_us = pd.DataFrame([{"成交日期": us_date.strftime("%Y-%m-%d"), "股票代號": us_tk.upper(), "交易類型": us_type, "成交價格": us_pr, "庫存股數": us_sh, "手續費": us_fe, "持有成本": pre_cost_us}])
+                        updated_us = pd.concat([df_us_raw, new_us], ignore_index=True)
+                        conn.update(spreadsheet=SHEET_US, data=updated_us)
+                        st.success("✅ 美股紀錄上傳成功！")
+                    except:
+                        st.error("寫入失敗，請使用右方按鈕前往手動填寫。")
+            with c_btn4:
+                st.link_button("👉 直接開啟 Google Sheets 手動填寫", SHEET_US, use_container_width=True)
 
     # ------------------------------------------
     # 🛬 Tab 3: 生命周期 & 退休
@@ -300,18 +341,18 @@ if st.session_state.analyzed:
     with tab3:
         st.subheader("⚖️ 生命周期曝險透視")
         exp_tw = cur_val_tw * 2
+        exp_us_usd = us_live['SOXL']['curr']*us_live['SOXL']['shares']*3 + us_live['BITX']['curr']*us_live['BITX']['shares']*2
         exp_us = exp_us_usd * usd_twd
         
-        # 佔比移到這裡
         col_p1, col_p2 = st.columns(2)
-        col_p1.metric("🇹🇼 台股投資組合佔比", f"{(cur_val_tw/(cur_val_tw+total_us_val_twd)*100):.1f}%", "佔總持股比例")
-        col_p2.metric("🇺🇸 美股投資組合佔比", f"{(total_us_val_twd/(cur_val_tw+total_us_val_twd)*100):.1f}%", "佔總持股比例")
+        col_p1.metric("📈 台股投資組合佔比", f"{(cur_val_tw/(cur_val_tw+total_us_val_twd)*100):.1f}%", "佔總持股比例")
+        col_p2.metric("🦅 美股投資組合佔比", f"{(total_us_val_twd/(cur_val_tw+total_us_val_twd)*100):.1f}%", "佔總持股比例")
 
         st.markdown(f"""
         | 戰區 | 曝險金額 (台幣) | 淨資產 (FC) | 實際曝險度 | 美金原值對照 |
         | :--- | :--- | :--- | :--- | :--- |
-        | 🇹🇼 台股 | NT$ {exp_tw/10000:,.0f} 萬 | NT$ {(cur_val_tw+cash/2-(loan1+loan2)/2)/10000:,.0f} 萬 | **{(exp_tw/FC*100):.1f}%** | - |
-        | 🇺🇸 美股 | NT$ {exp_us/10000:,.0f} 萬 | NT$ {(total_us_val_twd+cash/2-(loan1+loan2)/2)/10000:,.0f} 萬 | **{(exp_us/FC*100):.1f}%** | 曝險: **${exp_us_usd:,.0f}** / 淨值: **${total_us_val_usd:,.0f}** |
+        | 📈 台股 | NT$ {exp_tw/10000:,.0f} 萬 | NT$ {(cur_val_tw+cash/2-(loan1+loan2)/2)/10000:,.0f} 萬 | **{(exp_tw/FC*100):.1f}%** | - |
+        | 🦅 美股 | NT$ {exp_us/10000:,.0f} 萬 | NT$ {(total_us_val_twd+cash/2-(loan1+loan2)/2)/10000:,.0f} 萬 | **{(exp_us/FC*100):.1f}%** | 曝險: **${exp_us_usd:,.0f}** <br> 淨值: **${total_us_val_usd:,.0f}** |
         | 🔥 **總計** | **NT$ {(exp_tw+exp_us)/10000:,.0f} 萬** | **NT$ {FC/10000:,.0f} 萬** | **{((exp_tw+exp_us)/FC*100):.1f}%** | (匯率: {usd_twd}) |
         """)
         
@@ -323,8 +364,8 @@ if st.session_state.analyzed:
         diff_val = (exp_tw + exp_us) - target_val
         if diff_val > 0:
             st.error(f"🚨 **目前總曝險過高！** 建議減少市場部位總價值約 **NT$ {diff_val/10000:,.0f} 萬**")
-            st.write(f"👉 **台股部分：** 建議減碼 00631L 約 NT$ {diff_val/2/2/10000:,.1f} 萬市值")
-            st.write(f"👉 **美股部分：** 建議減碼 SOXL 約 NT$ {diff_val/3/10000:,.1f} 萬市值")
+            st.write(f"👉 **台股部分：** 若由台股調整，需減碼 00631L 約 NT$ {diff_val/2/10000:,.1f} 萬市值")
+            st.write(f"👉 **美股部分：** 若由美股調整，需減碼 SOXL 約 NT$ {diff_val/3/10000:,.1f} 萬市值")
         else:
             st.success(f"🟢 **目前曝險尚有空間！** 可增加市場部位約 **NT$ {abs(diff_val)/10000:,.0f} 萬**")
 
@@ -353,4 +394,4 @@ if st.session_state.analyzed:
                 gp.append({"年": f"第 {y} 年", "預估資產(萬)": f"{curr_f/10000:,.0f}", "應有曝險": f"{e_g:.1f}%"})
             st.table(pd.DataFrame(gp))
 
-st.caption("📱 提示：圖表已加入動態 Y 軸保護，避免極值切邊。點擊新增紀錄按鈕可直接跳轉至外部試算表。")
+st.caption("📱 提示：為相容多數系統，已使用通用圖示取代國旗。美股損益明細已新增實際金額對照。")
