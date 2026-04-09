@@ -7,11 +7,11 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V6.4 - 完美歸位穩固版
+# 賴賴投資戰情室 V6.5 - 介面文字除蟲版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="centered")
-st.title("🛡️ 賴賴投資戰情室 V6.4")
+st.title("🛡️ 賴賴投資戰情室 V6.5")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -118,7 +118,7 @@ if st.session_state.analyzed:
     yest_close = round(raw_yest_tw / 22.0, 2) if raw_yest_tw > 100 else raw_yest_tw
     cur_val = actual_shares * current_p
 
-    # 🇺🇸 美股即時報價 (完全退回 V4.9 穩定版，不加盤前修復，保證抓得到資料)
+    # 🇺🇸 美股即時報價 (完全退回穩定版)
     us_positions = {"SOXL": {"shares": 545, "cost": 50.99}, "TMF": {"shares": 1050, "cost": 52.94}, "BITX": {"shares": 11, "cost": 29.67}}
     tickers_us = ["SOXX", "SOXL", "TMF", "BITX"]
     us_data_hist = yf.download(tickers_us, period="20d", progress=False)
@@ -192,7 +192,6 @@ if st.session_state.analyzed:
         if mask.any(): adj_p.loc[mask] = adj_p.loc[mask] / 22.0
         recent_prices = adj_p[adj_p.index >= '2024-01-01']
         
-        # 恢復圖表 A 與 B
         for title, series, color in [("📈 A. 價格走勢與均價防線", recent_prices, '#E71D36'), ("📊 B. 乖離率動能圖", (recent_prices - recent_prices.rolling(20).mean())/recent_prices.rolling(20).mean()*100, '#F4A261')]:
             st.write(title)
             fig = go.Figure(); fig.add_trace(go.Scatter(x=series.index, y=series.values, mode='lines', line=dict(color=color, width=2)))
@@ -205,7 +204,6 @@ if st.session_state.analyzed:
                 fig.add_annotation(x=l_idx, y=l_val, text=f"低: {l_val:.2f}", showarrow=True, ay=30)
             fig.update_layout(template='plotly_white', margin=dict(l=0, r=0, t=30, b=0), height=230); st.plotly_chart(fig, use_container_width=True)
 
-        # 🌟 找回圖表 C (真實損益軌跡)
         st.write("💰 **C. 庫存損益率歷史真實軌跡**")
         if not temp_df.empty:
             trade_hist = temp_df.copy(); trade_hist = trade_hist.groupby('成交日期')[['庫存股數', '持有成本']].sum().reset_index(); trade_hist.set_index('成交日期', inplace=True); trade_hist.index = pd.to_datetime(trade_hist.index).tz_localize(None)
@@ -258,13 +256,23 @@ if st.session_state.analyzed:
         st.divider()
         st.subheader("📋 2. 美股總資產身價")
         tot_cost_us = sum([info['cost']*info['shares'] for info in us_positions.values()])
-        cu1, cu2 = st.columns(2); cu1.metric("美股總市值 (USD)", f"${total_us_val:,.2f}"); cu2.metric("未實現總損益", f"${total_us_val - tot_cost_us:,.2f}", f"{(total_us_val/tot_cost_us-1)*100:+.2f}%" if tot_cost_us>0 else "0%")
+        
+        # 🐞 修正未實現總損益 % 的顯示格式
+        tot_pnl_pct = (total_us_val/tot_cost_us-1)*100 if tot_cost_us > 0 else 0
+        cu1, cu2 = st.columns(2)
+        cu1.metric("美股總市值 (USD)", f"${total_us_val:,.2f}")
+        cu2.metric("未實現總損益", f"${total_us_val - tot_cost_us:,.2f}", f"{tot_pnl_pct:+.2f}%")
         
         st.subheader("📦 3. 個股明細快報")
         for t, info in us_positions.items():
             p_c = us_live[t]['curr']; p_y = us_live[t]['yest']; shr = info['shares']; avg = info['cost']
-            st.markdown(f"#### 📌 **{t}** | 今日: ${p_c:.2f} ({(p_c/p_y-1)*100:+.2f}% if p_y>0 else 0%)")
-            st.write(f"🔹 **損益:** ${(p_c-avg)*shr:,.2f} ({(p_c/avg-1)*100:+.2f}%) | **市值:** ${p_c*shr:,.2f}")
+            
+            # 🐞 修正個別股票 % 數的計算與顯示，先算出數值再放進字串
+            today_pct = (p_c/p_y-1)*100 if p_y > 0 else 0
+            pnl_pct = (p_c/avg-1)*100 if avg > 0 else 0
+            
+            st.markdown(f"#### 📌 **{t}** | 今日: ${p_c:.2f} ({today_pct:+.2f}%)")
+            st.write(f"🔹 **損益:** ${(p_c-avg)*shr:,.2f} ({pnl_pct:+.2f}%) | **市值:** ${p_c*shr:,.2f}")
 
     with tab3:
         st.subheader("🛬 生命周期投資法 & 退休終局")
@@ -313,4 +321,4 @@ if st.session_state.analyzed:
             records_gp.append({"第幾年": f"第 {y} 年" if y > 0 else "現在 (第0年)","預估 FC (8%)": f"{f8/10000:,.0f} 萬","應有曝險(8%)": f"{e8:.1f}%","保守(6%)": f"{e6:.1f}%","樂觀(10%)": f"{e10:.1f}%"})
         st.dataframe(pd.DataFrame(records_gp), use_container_width=True, hide_index=True)
 
-st.caption("📱 提示：已修復美股報價系統與台股三張圖表顯示，完全無損回歸。")
+st.caption("📱 提示：已徹底修復美股文字顯示錯誤，畫面乾淨無蟲。")
