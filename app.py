@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 # 賴賴投資戰情室 V8.6 - 細節打磨版
 # ==========================================
 
-st.set_page_config(page_title="賴賴終極戰情室", page_icon="📈", layout="wide")
+st.set_page_config(page_title="賴賴終極戰情室", page_icon="💰", layout="wide")
 st.title("🛡️ 賴賴投資戰情室 V8.6")
 
 if "analyzed" not in st.session_state:
