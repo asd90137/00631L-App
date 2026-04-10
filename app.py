@@ -33,14 +33,14 @@ def calculate_loan_remaining(principal, annual_rate, years, start_date):
 st.sidebar.header("⚙️ 資金與曝險參數")
 base_m_wan = st.sidebar.number_input("1. 基準每月定期定額 (萬)", value=10.0, step=1.0)
 cash_wan = st.sidebar.number_input("2. 目前帳戶可用現金 (萬)", value=200.0, step=10.0)
-us_cash_usd = st.sidebar.number_input("3. 美股可用現金 (USD)", value=0.0, step=100.0)
+us_cash_usd = st.sidebar.number_input("3. 美股可用現金 (USD)", value=345, step=10.0)
 target_exp_pct = st.sidebar.number_input("4. 設定目標曝險度 (%)", value=200)
 
 base_m = base_m_wan * 10000
 cash = cash_wan * 10000
 
 with st.sidebar.expander("🏦 貸款細項設定 (自動連動)", expanded=False):
-    l1_p = st.number_input("信貸一總額", value=2200000); l1_r = st.number_input("年利率1(%)", value=2.5); l1_d = st.date_input("首次扣款日1", datetime(2024, 1, 15))
+    l1_p = st.number_input("信貸一總額", value=2830000); l1_r = st.number_input("年利率1(%)", value=2.28); l1_d = st.date_input("首次扣款日1", datetime(2024, 1, 15))
     loan1, pmt1 = calculate_loan_remaining(l1_p, l1_r, 7, l1_d)
     st.info(f"貸1剩餘：{loan1/10000:.1f}萬")
     st.divider()
@@ -356,14 +356,14 @@ if st.session_state.analyzed:
         us_port_pct = ((total_us_val_usd * usd_twd) / total_port_val * 100) if total_port_val > 0 else 0
 
         col_p1, col_p2 = st.columns(2)
-        col_p1.metric("📈 台股投資組合佔比", f"{tw_port_pct:.1f}%", "佔總持股比例")
-        col_p2.metric("🦅 美股投資組合佔比", f"{us_port_pct:.1f}%", "佔總持股比例")
+        col_p1.metric("💰 台股投資組合佔比", f"{tw_port_pct:.1f}%", "佔總持股比例")
+        col_p2.metric("💵 美股投資組合佔比", f"{us_port_pct:.1f}%", "佔總持股比例")
 
         st.markdown(f"""
         | 戰區 | 曝險金額 (台幣) | 淨資產 (FC) | 獨立曝險度 | 備註 (美金原值對照) |
         | :--- | :--- | :--- | :--- | :--- |
-        | 📈 台股 | NT$ {exp_tw/10000:,.0f} 萬 | NT$ {FC_TW/10000:,.0f} 萬 | **{pct_tw:.1f}%** | - |
-        | 🦅 美股 | NT$ {exp_us_twd/10000:,.0f} 萬 | NT$ {(FC_US_USD*usd_twd)/10000:,.0f} 萬 | **{pct_us:.1f}%** | 曝險: **${exp_us_usd:,.0f}** <br> 淨值: **${FC_US_USD:,.0f}** |
+        | 💰 台股 | NT$ {exp_tw/10000:,.0f} 萬 | NT$ {FC_TW/10000:,.0f} 萬 | **{pct_tw:.1f}%** | - |
+        | 💵 美股 | NT$ {exp_us_twd/10000:,.0f} 萬 | NT$ {(FC_US_USD*usd_twd)/10000:,.0f} 萬 | **{pct_us:.1f}%** | 曝險: **${exp_us_usd:,.0f}** 淨值: **${FC_US_USD:,.0f}** |
         | 🔥 **綜合** | **NT$ {exp_total/10000:,.0f} 萬** | **NT$ {FC_TOTAL/10000:,.0f} 萬** | **{pct_total:.1f}%** | (匯率: {usd_twd}) |
         """)
         
