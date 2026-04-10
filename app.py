@@ -177,7 +177,7 @@ if st.session_state.analyzed:
         c5.metric("獨立實際曝險度", f"{pct_tw:.1f}%", "僅視台幣資產負債")
         
         c6, c7, c8, c9, c10 = st.columns(5)
-        c6.metric("庫存總股數", f"{actual_shares_tw:,.0f} 股")
+        c6.metric("庫存總張數", f"{actual_shares_tw:,.0f/1000} 張")
         c7.metric("持有均價", f"{actual_cost_tw/actual_shares_tw:.2f}" if actual_shares_tw>0 else "0")
         c8.metric("昨日還原收盤", f"{p_tw_yest:.2f}")
         c9.metric("目前現價", f"{p_tw_curr:.2f}")
