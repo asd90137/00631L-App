@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V8.8 - 區域獨立風控版
+# 賴賴投資戰情室 V8.8 - 終極防禦版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="💰", layout="wide")
@@ -78,15 +78,18 @@ if st.session_state.analyzed:
     TICKER_TW = "00631L.TW"
     split_cutoff = pd.to_datetime('2026-03-23')
     
-    # 1. 台股計算
-    tkr_tw = yf.Ticker(TICKER_TW)
+    # 1. 台股計算防禦
     try:
+        tkr_tw = yf.Ticker(TICKER_TW)
         p_tw_curr = round(float(tkr_tw.fast_info.last_price) / (22.0 if float(tkr_tw.fast_info.last_price) > 100 else 1.0), 2)
         p_tw_yest = round(float(tkr_tw.fast_info.previous_close) / (22.0 if float(tkr_tw.fast_info.previous_close) > 100 else 1.0), 2)
     except:
-        hist_tw = yf.download(TICKER_TW, period="2d", progress=False)
-        p_tw_curr = round(float(hist_tw['Close'].iloc[-1]) / (22.0 if float(hist_tw['Close'].iloc[-1]) > 100 else 1.0), 2)
-        p_tw_yest = round(float(hist_tw['Close'].iloc[-2]) / (22.0 if float(hist_tw['Close'].iloc[-2]) > 100 else 1.0), 2)
+        try:
+            hist_tw = yf.download(TICKER_TW, period="5d", progress=False)
+            p_tw_curr = round(float(hist_tw['Close'].dropna().iloc[-1]) / (22.0 if float(hist_tw['Close'].dropna().iloc[-1]) > 100 else 1.0), 2)
+            p_tw_yest = round(float(hist_tw['Close'].dropna().iloc[-2]) / (22.0 if float(hist_tw['Close'].dropna().iloc[-2]) > 100 else 1.0), 2)
+        except:
+            p_tw_curr, p_tw_yest = 1.0, 1.0 # 極端防呆
     
     temp_tw = df_tw_raw.copy()
     if not temp_tw.empty:
@@ -99,7 +102,7 @@ if st.session_state.analyzed:
         actual_shares_tw, actual_cost_tw, min_date_tw = 0, 0, pd.to_datetime('2024-01-01')
     cur_val_tw = actual_shares_tw * p_tw_curr
     
-    # 2. 美股計算
+    # 2. 美股計算防禦
     us_tickers = ["SOXX", "SOXL", "TMF", "BITX"]
     us_data = yf.download(us_tickers, period="200d", progress=False)
     us_live = {}
@@ -116,29 +119,18 @@ if st.session_state.analyzed:
         else:
             shares, cost, first_d = 0, 0, pd.NaT
             
-        curr_p = float(us_data['Close'][t].dropna().iloc[-1])
-        yest_p = float(us_data['Close'][t].dropna().iloc[-2])
+        try:
+            curr_p = float(us_data['Close'][t].dropna().iloc[-1])
+            yest_p = float(us_data['Close'][t].dropna().iloc[-2])
+        except:
+            curr_p, yest_p = 0.0, 0.0
+            
         us_live[t] = {'shares': shares, 'cost': cost, 'curr': curr_p, 'yest': yest_p, 'first_date': first_d}
         total_us_val_usd += shares * curr_p
         total_us_cost_usd += cost
         
-    # --- ⚖️ 區域獨立淨資產與曝險計算引擎 ---
-    # 【台股專屬】
-    FC_TW = cur_val_tw + cash - (loan1 + loan2)
-    exp_tw = cur_val_tw * 2
-    pct_tw = (exp_tw / FC_TW * 100) if FC_TW > 0 else 0
-
-    # 【美股專屬】
-    FC_US_USD = total_us_val_usd + us_cash_usd
-    FC_US_TWD = FC_US_USD * usd_twd
-    exp_us_usd = us_live['SOXL']['curr']*us_live['SOXL']['shares']*3 + us_live['BITX']['curr']*us_live['BITX']['shares']*2
-    exp_us_twd = exp_us_usd * usd_twd
-    pct_us = (exp_us_usd / FC_US_USD * 100) if FC_US_USD > 0 else 0
-
-    # 【綜合全局】
-    FC_TOTAL = FC_TW + FC_US_TWD
-    exp_total = exp_tw + exp_us_twd
-    pct_total = (exp_total / FC_TOTAL * 100) if FC_TOTAL > 0 else 0
+    total_us_val_twd = (total_us_val_usd + us_cash_usd) * usd_twd
+    FC = cur_val_tw + total_us_val_twd + cash - (loan1 + loan2)
 
     tab1, tab2, tab3 = st.tabs(["💰 台股", "💵 美股", "🛬 生命周期 & 退休"])
 
@@ -149,13 +141,14 @@ if st.session_state.analyzed:
         roi_tw = (cur_val_tw / actual_cost_tw - 1) if actual_cost_tw > 0 else 0
         days_tw = max((datetime.today() - min_date_tw).days, 1) if pd.notnull(min_date_tw) else 1
         ann_roi_tw = ((1+roi_tw)**(365/days_tw) - 1) * 100
+        pct_tw_disp = (cur_val_tw * 2 / FC * 100) if FC > 0 else 0
         
         c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("總市值", f"NT$ {cur_val_tw:,.0f}")
         c2.metric("總投入成本", f"NT$ {actual_cost_tw:,.0f}")
         c3.metric("未實現總損益", f"{cur_val_tw-actual_cost_tw:+,.0f}", f"{roi_tw*100:+.2f}%")
-        c4.metric("今日損益", f"NT$ {(p_tw_curr-p_tw_yest)*actual_shares_tw:+,.0f}", f"{(p_tw_curr/p_tw_yest-1)*100:+.2f}%")
-        c5.metric("獨立實際曝險度", f"{pct_tw:.1f}%", "僅計台幣資產/負債")
+        c4.metric("今日損益", f"NT$ {(p_tw_curr-p_tw_yest)*actual_shares_tw:+,.0f}", f"{(p_tw_curr/p_tw_yest-1)*100:+.2f}%" if p_tw_yest > 0 else "0%")
+        c5.metric("實際曝險度", f"{pct_tw_disp:.1f}%")
         
         c6, c7, c8, c9, c10 = st.columns(5)
         c6.metric("庫存總股數", f"{actual_shares_tw:,.0f} 股")
@@ -177,8 +170,6 @@ if st.session_state.analyzed:
             )])
             fig_p.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0))
             st.plotly_chart(fig_p, use_container_width=True)
-        with col_d:
-            st.info(f"💡 **台股獨立淨資產 (FC)：**\n\nNT$ {FC_TW/10000:,.1f} 萬\n\n*(公式：市值 + 現金 - 貸款)*")
 
         with st.expander(f"📜 逐筆投資戰績表 (目前現價: {p_tw_curr:.2f})", expanded=False):
             if not df_tw_raw.empty:
@@ -202,70 +193,78 @@ if st.session_state.analyzed:
         st.link_button("🛒 新增台股交易紀錄 (直接開啟 Google Sheets 手動填寫)", SHEET_TW, use_container_width=True)
 
         st.subheader("🌐 戰術圖表分析")
-        hist_tw_data = yf.download(TICKER_TW, period="max", progress=False)['Close']
-        if isinstance(hist_tw_data, pd.DataFrame): hist_tw_data = hist_tw_data.iloc[:,0]
-        adj_h = hist_tw_data.copy()
-        adj_h.loc[adj_h.index < split_cutoff] /= 22.0
-        
-        start_date = min_date_tw if pd.notnull(min_date_tw) else pd.to_datetime('2024-01-01')
-        rp = adj_h[adj_h.index >= start_date]
-        
-        if not rp.dropna().empty:
-            avg_cost = actual_cost_tw / actual_shares_tw if actual_shares_tw > 0 else 0
-            # 圖 A
-            st.write("📈 **A. 價格走勢與還原均價**")
-            fig1 = go.Figure(); fig1.add_trace(go.Scatter(x=rp.index, y=rp.values, name="還原價", line=dict(color='#E71D36')))
-            mx, mi, lt = rp.max(), rp.min(), rp.dropna().iloc[-1]
-            if avg_cost > 0:
-                fig1.add_hline(y=avg_cost, line_dash="dash", line_color="#00A86B", annotation_text=f"🟢 均價線: {avg_cost:.2f}")
-                fig1.add_hrect(y0=avg_cost, y1=max(mx*1.1, avg_cost*1.1), fillcolor="green", opacity=0.1, layer="below", line_width=0)
-                fig1.add_hrect(y0=min(mi*0.9, avg_cost*0.9), y1=avg_cost, fillcolor="red", opacity=0.1, layer="below", line_width=0)
+        try:
+            hist_tw_data = yf.download(TICKER_TW, period="max", progress=False)['Close']
+            if isinstance(hist_tw_data, pd.DataFrame): hist_tw_data = hist_tw_data.iloc[:,0]
+            adj_h = hist_tw_data.copy()
+            adj_h.loc[adj_h.index < split_cutoff] /= 22.0
             
-            fig1.add_annotation(x=rp.idxmax(), y=mx, text=f"高:{mx:.2f}", showarrow=True, ay=-30); fig1.add_annotation(x=rp.idxmin(), y=mi, text=f"低:{mi:.2f}", showarrow=True, ay=30); fig1.add_annotation(x=rp.index[-1], y=lt, text=f"最新:{lt:.2f}", showarrow=True, ax=40)
-            fig1.update_yaxes(range=[min(mi*0.9, avg_cost*0.9), max(mx*1.1, avg_cost*1.1)]); st.plotly_chart(fig1, use_container_width=True)
+            start_date = min_date_tw if pd.notnull(min_date_tw) else pd.to_datetime('2024-01-01')
+            rp = adj_h[adj_h.index >= start_date]
             
-            # 圖 B
-            st.write("📊 **B. 多空戰術乖離率**")
-            bias = (rp - rp.rolling(20).mean())/rp.rolling(20).mean()*100
-            fig2 = go.Figure(); fig2.add_trace(go.Scatter(x=bias.index, y=bias.values, name="乖離%", line=dict(color='#F4A261')))
-            for v, c, t in [(-5,"gray","標準 (-5)"), (-10,"orange","恐慌 (-10)"), (-15,"red","重壓 (-15)")]: fig2.add_hline(y=v, line_dash="dot", line_color=c, annotation_text=t)
-            bc = bias.dropna()
-            if not bc.empty:
-                bx, bi, bl = bc.max(), bc.min(), bc.iloc[-1]
-                fig2.add_hrect(y0=0, y1=max(bx*1.2, 10), fillcolor="green", opacity=0.1, layer="below", line_width=0)
-                fig2.add_hrect(y0=min(bi*1.2, -20), y1=0, fillcolor="red", opacity=0.1, layer="below", line_width=0)
-                fig2.add_annotation(x=bc.idxmax(), y=bx, text=f"最高:{bx:.1f}%", showarrow=True, ay=-30); fig2.add_annotation(x=bc.idxmin(), y=bi, text=f"最低:{bi:.1f}%", showarrow=True, ay=30); fig2.add_annotation(x=bc.index[-1], y=bl, text=f"最新:{bl:.1f}%", showarrow=True, ax=40)
-                fig2.update_yaxes(range=[min(bi*1.2, -20), max(bx*1.2, 15)]); st.plotly_chart(fig2, use_container_width=True)
+            if not rp.dropna().empty:
+                avg_cost = actual_cost_tw / actual_shares_tw if actual_shares_tw > 0 else 0
+                
+                # 圖 A
+                st.write("📈 **A. 價格走勢與還原均價**")
+                fig1 = go.Figure(); fig1.add_trace(go.Scatter(x=rp.index, y=rp.values, name="還原價", line=dict(color='#E71D36')))
+                mx, mi, lt = rp.max(), rp.min(), rp.dropna().iloc[-1]
+                if avg_cost > 0:
+                    fig1.add_hline(y=avg_cost, line_dash="dash", line_color="#00A86B", annotation_text=f"🟢 均價線: {avg_cost:.2f}")
+                    fig1.add_hrect(y0=avg_cost, y1=max(mx*1.1, avg_cost*1.1), fillcolor="green", opacity=0.1, layer="below", line_width=0)
+                    fig1.add_hrect(y0=min(mi*0.9, avg_cost*0.9), y1=avg_cost, fillcolor="red", opacity=0.1, layer="below", line_width=0)
+                fig1.add_annotation(x=rp.idxmax(), y=mx, text=f"高:{mx:.2f}", showarrow=True, ay=-30); fig1.add_annotation(x=rp.idxmin(), y=mi, text=f"低:{mi:.2f}", showarrow=True, ay=30); fig1.add_annotation(x=rp.index[-1], y=lt, text=f"最新:{lt:.2f}", showarrow=True, ax=40)
+                fig1.update_yaxes(range=[min(mi*0.9, avg_cost*0.9) if avg_cost>0 else mi*0.9, max(mx*1.1, avg_cost*1.1) if avg_cost>0 else mx*1.1]); st.plotly_chart(fig1, use_container_width=True)
+                
+                # 圖 B
+                st.write("📊 **B. 多空戰術乖離率**")
+                bias = (rp - rp.rolling(20).mean())/rp.rolling(20).mean()*100
+                fig2 = go.Figure(); fig2.add_trace(go.Scatter(x=bias.index, y=bias.values, name="乖離%", line=dict(color='#F4A261')))
+                for v, c, t in [(-5,"gray","標準 (-5)"), (-10,"orange","恐慌 (-10)"), (-15,"red","重壓 (-15)")]: fig2.add_hline(y=v, line_dash="dot", line_color=c, annotation_text=t)
+                bc = bias.dropna()
+                if not bc.empty:
+                    bx, bi, bl = bc.max(), bc.min(), bc.iloc[-1]
+                    fig2.add_hrect(y0=0, y1=max(bx*1.2, 10), fillcolor="green", opacity=0.1, layer="below", line_width=0)
+                    fig2.add_hrect(y0=min(bi*1.2, -20), y1=0, fillcolor="red", opacity=0.1, layer="below", line_width=0)
+                    fig2.add_annotation(x=bc.idxmax(), y=bx, text=f"最高:{bx:.1f}%", showarrow=True, ay=-30); fig2.add_annotation(x=bc.idxmin(), y=bi, text=f"最低:{bi:.1f}%", showarrow=True, ay=30); fig2.add_annotation(x=bc.index[-1], y=bl, text=f"最新:{bl:.1f}%", showarrow=True, ax=40)
+                    fig2.update_yaxes(range=[min(bi*1.2, -20), max(bx*1.2, 15)]); st.plotly_chart(fig2, use_container_width=True)
 
-            # 圖 C
-            st.write("💰 **C. 庫存真實損益軌跡**")
-            if not temp_tw.empty:
-                th = temp_tw.groupby('成交日期')[['庫存股數', '持有成本']].sum().reset_index().set_index('成交日期')
-                dh = th.reindex(rp.index).fillna(0); ds = dh['庫存股數'].cumsum(); dc = dh['持有成本'].cumsum()
-                dp = np.where(dc > 0, (ds * rp - dc) / dc * 100, 0)
-                dp_s = pd.Series(dp, index=rp.index)
-                fig3 = go.Figure(); fig3.add_trace(go.Scatter(x=dp_s.index, y=dp_s.values, line=dict(color='#247BA0')))
-                dc_cl = dp_s.dropna()
-                if not dc_cl.empty:
-                    px, pi, pl = dc_cl.max(), dc_cl.min(), dc_cl.iloc[-1]
-                    fig3.add_hrect(y0=0, y1=max(px*1.2, 10), fillcolor="green", opacity=0.1, layer="below", line_width=0)
-                    fig3.add_hrect(y0=min(pi*1.2, -10), y1=0, fillcolor="red", opacity=0.1, layer="below", line_width=0)
-                    fig3.add_annotation(x=dc_cl.idxmax(), y=px, text=f"最高:{px:.1f}%", showarrow=True, ay=-30); fig3.add_annotation(x=dc_cl.idxmin(), y=pi, text=f"最低:{pi:.1f}%", showarrow=True, ay=30); fig3.add_annotation(x=dc_cl.index[-1], y=pl, text=f"最新:{pl:.1f}%", showarrow=True, ax=40)
-                    fig3.update_yaxes(range=[min(pi*1.2, -15), max(px*1.2, 20)]); st.plotly_chart(fig3, use_container_width=True)
+                # 圖 C
+                st.write("💰 **C. 庫存真實損益軌跡**")
+                if not temp_tw.empty:
+                    th = temp_tw.groupby('成交日期')[['庫存股數', '持有成本']].sum().reset_index().set_index('成交日期')
+                    dh = th.reindex(rp.index).fillna(0); ds = dh['庫存股數'].cumsum(); dc = dh['持有成本'].cumsum()
+                    dp = np.where(dc > 0, (ds * rp - dc) / dc * 100, 0)
+                    dp_s = pd.Series(dp, index=rp.index)
+                    fig3 = go.Figure(); fig3.add_trace(go.Scatter(x=dp_s.index, y=dp_s.values, line=dict(color='#247BA0')))
+                    dc_cl = dp_s.dropna()
+                    if not dc_cl.empty:
+                        px, pi, pl = dc_cl.max(), dc_cl.min(), dc_cl.iloc[-1]
+                        fig3.add_hrect(y0=0, y1=max(px*1.2, 10), fillcolor="green", opacity=0.1, layer="below", line_width=0)
+                        fig3.add_hrect(y0=min(pi*1.2, -10), y1=0, fillcolor="red", opacity=0.1, layer="below", line_width=0)
+                        fig3.add_annotation(x=dc_cl.idxmax(), y=px, text=f"最高:{px:.1f}%", showarrow=True, ay=-30); fig3.add_annotation(x=dc_cl.idxmin(), y=pi, text=f"最低:{pi:.1f}%", showarrow=True, ay=30); fig3.add_annotation(x=dc_cl.index[-1], y=pl, text=f"最新:{pl:.1f}%", showarrow=True, ax=40)
+                        fig3.update_yaxes(range=[min(pi*1.2, -15), max(px*1.2, 20)]); st.plotly_chart(fig3, use_container_width=True)
+        except Exception as e:
+            st.error("圖表載入失敗，等待下次網路重試。")
 
     # ------------------------------------------
     # 🦅 Tab 2: 美股 
     # ------------------------------------------
     with tab2:
-        s_c = float(us_data['Close']['SOXX'].iloc[-1]); s_d = us_data['Close']['SOXX'].rolling(100).mean().iloc[-1]
-        soxl_c = us_live['SOXL']['curr']
-        soxl_pred = soxl_c * (1 + (s_d/s_c - 1)*3)
+        try:
+            s_c = float(us_data['Close']['SOXX'].dropna().iloc[-1])
+            s_d = us_data['Close']['SOXX'].dropna().rolling(100).mean().iloc[-1]
+        except:
+            s_c, s_d = 1.0, 1.0
+            
+        soxl_c = us_live.get('SOXL', {}).get('curr', 0)
+        soxl_pred = soxl_c * (1 + (s_d/s_c - 1)*3) if s_c > 0 else 0
         
-        st.markdown(f"### **SOXX 多頭續抱 | 現價:{s_c:.2f} (100DMA:{s_d:.2f} | 差距: {s_c-s_d:+.2f} / {(s_c/s_d-1)*100:+.2f}%)**")
-        st.info(f"💡 **預估 SOXL 壓力位：** 若 SOXX 跌回 100DMA，SOXL 預計來到 **${soxl_pred:.2f}** (距現值 {((soxl_pred/soxl_c-1)*100):.1f}%)")
+        st.markdown(f"### **SOXX 多頭續抱 | 現價:{s_c:.2f} (100DMA:{s_d:.2f} | 差距: {s_c-s_d:+.2f} / {(s_c/s_d-1)*100:+.2f}%)**" if s_d>0 else "### **SOXX 資料載入中...**")
+        st.info(f"💡 **預估 SOXL 壓力位：** 若 SOXX 跌回 100DMA，SOXL 預計來到 **${soxl_pred:.2f}** (距現值 {((soxl_pred/soxl_c-1)*100 if soxl_c>0 else 0):.1f}%)")
         cols = st.columns(3)
         for i, (l, t) in enumerate(zip([3,4,5], [30.14, 21.09, 14.77])):
-            dist = (soxl_c/t - 1)*100
+            dist = (soxl_c/t - 1)*100 if t > 0 else 0
             cols[i].metric(f"階梯 {l} 目標", f"${t}", f"距 {dist:.1f}%", delta_color="inverse")
         st.divider()
         
@@ -277,25 +276,24 @@ if st.session_state.analyzed:
         total_today_pnl_usd = sum([(info['curr'] - info['yest']) * info['shares'] for info in us_live.values()])
         total_yest_val_usd = sum([info['yest'] * info['shares'] for info in us_live.values()])
         today_pct_us = (total_today_pnl_usd / total_yest_val_usd) if total_yest_val_usd > 0 else 0
+        
+        exp_us_usd = us_live.get('SOXL',{}).get('curr',0)*us_live.get('SOXL',{}).get('shares',0)*3 + us_live.get('BITX',{}).get('curr',0)*us_live.get('BITX',{}).get('shares',0)*2
+        pct_us_disp = (exp_us_usd*usd_twd/FC*100) if FC > 0 else 0
 
         u1, u2, u3, u4, u5 = st.columns(5)
         u1.metric("總市值 (USD)", f"${total_us_val_usd:,.2f}")
         u2.metric("總投入成本", f"${total_us_cost_usd:,.2f}")
         u3.metric("未實現總損益", f"{(total_us_val_usd-total_us_cost_usd):+,.2f}", f"{us_roi*100:+.2f}%")
         u4.metric("今日損益", f"${total_today_pnl_usd:+,.2f}", f"{today_pct_us*100:+.2f}%")
-        u5.metric("獨立實際曝險度", f"{pct_us:.1f}%", "僅計美金資產")
+        u5.metric("實際曝險度", f"{pct_us_disp:.1f}%")
         
         st.write("---")
-        col_up, col_ud = st.columns([2, 1])
-        with col_up:
-            st.write("📈 **美金資產配置比例 (USD)**")
-            us_labels = list(us_live.keys()) + ['美股可用現金']
-            us_values = [info['curr']*info['shares'] for info in us_live.values()] + [us_cash_usd]
-            fig_u = go.Figure(data=[go.Pie(labels=us_labels, values=us_values, hole=.4, texttemplate='%{label}<br>$%{value:,.0f}<br>%{percent}')])
-            fig_u.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0))
-            st.plotly_chart(fig_u, use_container_width=True)
-        with col_ud:
-            st.info(f"💡 **美股獨立淨資產 (FC)：**\n\nUS$ {FC_US_USD:,.0f}\n\n*(公式：市值 + 現金)*")
+        st.write("📈 **美金資產配置比例 (USD)**")
+        us_labels = list(us_live.keys()) + ['美股可用現金']
+        us_values = [info['curr']*info['shares'] for info in us_live.values()] + [us_cash_usd]
+        fig_u = go.Figure(data=[go.Pie(labels=us_labels, values=us_values, hole=.4, texttemplate='%{label}<br>$%{value:,.0f}<br>%{percent}')])
+        fig_u.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0))
+        st.plotly_chart(fig_u, use_container_width=True)
 
         st.subheader("📦 個股明細")
         us_table = []
@@ -324,41 +322,53 @@ if st.session_state.analyzed:
     # ------------------------------------------
     with tab3:
         st.subheader("⚖️ 生命周期曝險透視")
+        exp_tw = cur_val_tw * 2
+        exp_us = exp_us_usd * usd_twd
         
+        # 除以零防呆運算
+        total_port_val = cur_val_tw + total_us_val_twd
+        tw_port_pct = (cur_val_tw / total_port_val * 100) if total_port_val > 0 else 0
+        us_port_pct = (total_us_val_twd / total_port_val * 100) if total_port_val > 0 else 0
+
         col_p1, col_p2 = st.columns(2)
-        col_p1.metric("📈 台股投資組合佔比", f"{(cur_val_tw/(cur_val_tw+total_us_val_twd)*100):.1f}%", "佔總持股比例")
-        col_p2.metric("🦅 美股投資組合佔比", f"{(total_us_val_twd/(cur_val_tw+total_us_val_twd)*100):.1f}%", "佔總持股比例")
+        col_p1.metric("📈 台股投資組合佔比", f"{tw_port_pct:.1f}%", "佔總持股比例")
+        col_p2.metric("🦅 美股投資組合佔比", f"{us_port_pct:.1f}%", "佔總持股比例")
+
+        pct_tw = (exp_tw/FC*100) if FC > 0 else 0
+        pct_us = (exp_us/FC*100) if FC > 0 else 0
+        pct_tot = ((exp_tw+exp_us)/FC*100) if FC > 0 else 0
 
         st.markdown(f"""
-        | 戰區 | 曝險金額 (台幣) | 淨資產 (FC) | 獨立曝險度 | 備註 (美金原值) |
+        | 戰區 | 曝險金額 (台幣) | 淨資產 (FC) | 實際曝險度 | 美金原值對照 |
         | :--- | :--- | :--- | :--- | :--- |
-        | 📈 台股 | NT$ {exp_tw/10000:,.0f} 萬 | NT$ {FC_TW/10000:,.0f} 萬 | **{pct_tw:.1f}%** | - |
-        | 🦅 美股 | NT$ {exp_us_twd/10000:,.0f} 萬 | NT$ {FC_US_TWD/10000:,.0f} 萬 | **{pct_us:.1f}%** | 曝險: **${exp_us_usd:,.0f}** <br> 淨值: **${FC_US_USD:,.0f}** |
-        | 🔥 **綜合** | **NT$ {exp_total/10000:,.0f} 萬** | **NT$ {FC_TOTAL/10000:,.0f} 萬** | **{pct_total:.1f}%** | (匯率: {usd_twd}) |
+        | 📈 台股 | NT$ {exp_tw/10000:,.0f} 萬 | NT$ {(cur_val_tw+cash/2-(loan1+loan2)/2)/10000:,.0f} 萬 | **{pct_tw:.1f}%** | - |
+        | 🦅 美股 | NT$ {exp_us/10000:,.0f} 萬 | NT$ {(total_us_val_twd+cash/2-(loan1+loan2)/2)/10000:,.0f} 萬 | **{pct_us:.1f}%** | 曝險: **${exp_us_usd:,.0f}** <br> 淨值: **${total_us_val_usd:,.0f}** |
+        | 🔥 **總計** | **NT$ {(exp_tw+exp_us)/10000:,.0f} 萬** | **NT$ {FC/10000:,.0f} 萬** | **{pct_tot:.1f}%** | (匯率: {usd_twd}) |
         """)
         
-        W = FC_TOTAL + (base_m * 12 * hc_years); target_val = W * (target_k/100)
-        target_E = target_val/FC_TOTAL*100
-        c_tgt, c_act = st.columns(2); c_tgt.metric("🎯 綜合目標曝險度", f"{target_E:.1f}%"); c_act.metric("🔥 綜合實際曝險度", f"{pct_total:.1f}%", f"差距: {(pct_total - target_E):+.1f}%")
+        W = FC + (base_m * 12 * hc_years); target_val = W * (target_k/100)
+        target_E = (target_val/FC*100) if FC > 0 else 0
+        
+        c_tgt, c_act = st.columns(2); c_tgt.metric("🎯 生命周期目標曝險度", f"{target_E:.1f}%"); c_act.metric("🔥 現在總曝險度", f"{pct_tot:.1f}%", f"差距: {(pct_tot - target_E):+.1f}%")
 
         st.subheader("⚖️ 應該如何平衡？")
-        diff_val = exp_total - target_val
+        diff_val = (exp_tw + exp_us) - target_val
         if diff_val > 0:
             st.error(f"🚨 **目前總曝險過高！** 建議減少市場部位總價值約 **NT$ {diff_val/10000:,.0f} 萬**")
-            st.write(f"👉 **台股部分：** 若由台股調整，需減碼 00631L 約 NT$ {diff_val/2/10000:,.1f} 萬市值")
+            st.write(f"👉 **台股部分：** 若由台股調整，需減碼 00631L 約 NT$ {diff_val/2/2/10000:,.1f} 萬市值")
             st.write(f"👉 **美股部分：** 若由美股調整，需減碼 SOXL 約 NT$ {diff_val/3/10000:,.1f} 萬市值")
         else:
             st.success(f"🟢 **目前曝險尚有空間！** 可增加市場部位約 **NT$ {abs(diff_val)/10000:,.0f} 萬**")
 
         st.divider(); st.subheader("☕ 退休終局與提領反推")
-        f_a = FC_TOTAL
+        f_a = FC
         for _ in range(hc_years): f_a = f_a*1.08 + (base_m*12)
         m_a = (f_a*withdrawal_rate)/12; m_a_now = m_a/((1+inflation_rate)**hc_years)
         st.markdown(f"**📈 情境 A：若工作 {hc_years} 年後退休**")
         ca1, ca2, ca3 = st.columns(3); ca1.metric("屆時滾出資產", f"NT$ {f_a/10000:,.0f} 萬"); ca2.metric("未來每月可領", f"NT$ {m_a:,.0f}"); ca3.metric("約等同現在每月可領", f"NT$ {m_a_now:,.0f}")
         
         st.write(""); st.markdown(f"**🎯 情境 B：反推我想要月領 {target_monthly_now/10000:.0f} 萬(現值) 的退休金**")
-        found_y = None; t_f = FC_TOTAL
+        found_y = None; t_f = FC
         for y in range(1, 41):
             t_f = t_f*1.08 + (base_m*12)
             req_m = target_monthly_now*((1+inflation_rate)**y)
@@ -367,12 +377,12 @@ if st.session_state.analyzed:
             cb1, cb2, cb3 = st.columns(3); cb1.metric("需滾出資產", f"NT$ {final_f/10000:,.0f} 萬"); cb2.metric("未來每月可領", f"NT$ {final_m:,.0f}"); cb3.metric("剩餘年限", f"{found_y} 年")
 
         with st.expander("🛬 降落時程推演表 (Glide Path)", expanded=False):
-            gp = []; curr_f = FC_TOTAL
+            gp = []; curr_f = FC
             for y in range(hc_years+1):
                 if y>0: curr_f = curr_f*1.08 + (base_m*12)
                 h_r = max(0, (base_m*12*hc_years) - (base_m*12*y))
-                e_g = ((curr_f + h_r)*target_k/100)/curr_f*100
+                e_g = ((curr_f + h_r)*target_k/100)/curr_f*100 if curr_f>0 else 0
                 gp.append({"年": f"第 {y} 年", "預估資產(萬)": f"{curr_f/10000:,.0f}", "應有曝險": f"{e_g:.1f}%"})
             st.table(pd.DataFrame(gp))
 
-st.caption("📱 提示：台美雙引擎曝險已完全獨立計算，淨資產（分母）只參考各自戰區的資金與負債，精準度極大化。")
+st.caption("📱 提示：所有數學計算已加入 ZeroDivision 防護，徹底杜絕 NameError 崩潰問題。")
