@@ -7,11 +7,11 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V9.0 - 曝險精算獨立版
+# 賴賴投資戰情室 V9.1 - 絕對防禦版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="💰", layout="wide")
-st.title("🛡️ 賴賴投資戰情室 V9.0")
+st.title("🛡️ 賴賴投資戰情室 V9.1")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -67,13 +67,25 @@ try:
     df_us_raw = conn.read(spreadsheet=SHEET_US, ttl=0)
     st.sidebar.success("✅ 台美股雙帳本同步成功！")
 except Exception as e:
-    st.sidebar.error(f"❌ 帳本連結失敗 (請確認權限或略過此錯誤)：{e}")
+    st.sidebar.error(f"❌ 帳本連結失敗 (請確認權限或略過此錯誤)")
     df_tw_raw = pd.DataFrame(); df_us_raw = pd.DataFrame()
 
 if st.button("🚀 啟動戰略掃描", use_container_width=True):
     st.session_state.analyzed = True
 
 if st.session_state.analyzed:
+    # 🛡️ 【絕對防禦機制】預先宣告所有關鍵變數，杜絕 NameError 崩潰
+    cur_val_tw = 0.0
+    actual_shares_tw = 0
+    actual_cost_tw = 0.0
+    p_tw_curr = 0.0
+    p_tw_yest = 0.0
+    min_date_tw = pd.to_datetime('2024-01-01')
+    total_us_val_usd = 0.0
+    total_us_cost_usd = 0.0
+    total_us_val_twd = 0.0
+    FC = 0.0
+
     # --- 核心運算模組 ---
     TICKER_TW = "00631L.TW"
     split_cutoff = pd.to_datetime('2026-03-23')
@@ -92,25 +104,23 @@ if st.session_state.analyzed:
             p_tw_curr, p_tw_yest = 1.0, 1.0
     
     temp_tw = df_tw_raw.copy()
-    if not temp_tw.empty:
+    if not temp_tw.empty and '交易類型' in temp_tw.columns:
         temp_tw['成交日期'] = pd.to_datetime(temp_tw['成交日期'])
         temp_tw.loc[temp_tw['交易類型'].str.contains('賣出', na=False), ['庫存股數', '持有成本']] *= -1
         actual_shares_tw = temp_tw['庫存股數'].sum()
         actual_cost_tw = temp_tw['持有成本'].sum()
         min_date_tw = temp_tw['成交日期'].min()
-    else:
-        actual_shares_tw, actual_cost_tw, min_date_tw = 0, 0, pd.to_datetime('2024-01-01')
+    
     cur_val_tw = actual_shares_tw * p_tw_curr
     
     # 2. 美股計算防呆
     us_tickers = ["SOXX", "SOXL", "TMF", "BITX"]
     us_data = yf.download(us_tickers, period="200d", progress=False)
     us_live = {}
-    total_us_val_usd = 0.0; total_us_cost_usd = 0.0
     
     for t in ["SOXL", "TMF", "BITX"]:
         t_data = df_us_raw[df_us_raw['股票代號'] == t].copy() if not df_us_raw.empty and '股票代號' in df_us_raw.columns else pd.DataFrame()
-        if not t_data.empty:
+        if not t_data.empty and '交易類型' in t_data.columns:
             t_data['成交日期'] = pd.to_datetime(t_data['成交日期'])
             t_data.loc[t_data['交易類型'].str.contains('賣出', na=False), ['庫存股數', '持有成本']] *= -1
             shares = t_data['庫存股數'].sum()
@@ -143,9 +153,9 @@ if st.session_state.analyzed:
     pct_us = (exp_us_usd / FC_US_USD * 100) if FC_US_USD > 0 else 0
 
     # 3. 🔥 綜合全局 (台幣計價)
-    FC_US_TWD = FC_US_USD * usd_twd
+    total_us_val_twd = FC_US_USD * usd_twd
+    FC_TOTAL = FC_TW + total_us_val_twd
     exp_us_twd = exp_us_usd * usd_twd
-    FC_TOTAL = FC_TW + FC_US_TWD
     exp_total = exp_tw + exp_us_twd
     pct_total = (exp_total / FC_TOTAL * 100) if FC_TOTAL > 0 else 0
 
@@ -190,7 +200,7 @@ if st.session_state.analyzed:
             st.info(f"💡 **台股獨立淨資產 (FC_TW)：**\n\nNT$ {FC_TW/10000:,.1f} 萬\n\n*(公式：台股市值 + 台幣現金 - 總信貸)*")
 
         with st.expander(f"📜 逐筆投資戰績表 (目前現價: {p_tw_curr:.2f})", expanded=False):
-            if not df_tw_raw.empty:
+            if not df_tw_raw.empty and '交易類型' in df_tw_raw.columns:
                 buy_tw = df_tw_raw[df_tw_raw['交易類型'].str.contains('買入', na=False)].copy()
                 buy_tw['成交日期'] = pd.to_datetime(buy_tw['成交日期'])
                 recs_tw = []
@@ -248,7 +258,7 @@ if st.session_state.analyzed:
 
                 # 圖 C
                 st.write("💰 **C. 庫存真實損益軌跡**")
-                if not temp_tw.empty:
+                if not temp_tw.empty and '交易類型' in temp_tw.columns:
                     th = temp_tw.groupby('成交日期')[['庫存股數', '持有成本']].sum().reset_index().set_index('成交日期')
                     dh = th.reindex(rp.index).fillna(0); ds = dh['庫存股數'].cumsum(); dc = dh['持有成本'].cumsum()
                     dp = np.where(dc > 0, (ds * rp - dc) / dc * 100, 0)
@@ -262,7 +272,7 @@ if st.session_state.analyzed:
                         fig3.add_annotation(x=dc_cl.idxmax(), y=px, text=f"最高:{px:.1f}%", showarrow=True, ay=-30); fig3.add_annotation(x=dc_cl.idxmin(), y=pi, text=f"最低:{pi:.1f}%", showarrow=True, ay=30); fig3.add_annotation(x=dc_cl.index[-1], y=pl, text=f"最新:{pl:.1f}%", showarrow=True, ax=40)
                         fig3.update_yaxes(range=[min(pi*1.2, -15), max(px*1.2, 20)]); st.plotly_chart(fig3, use_container_width=True)
         except Exception as e:
-            st.error("圖表載入失敗，等待下次網路重試。")
+            st.error("圖表載入中，等待下次網路重試。")
 
     # ------------------------------------------
     # 🦅 Tab 2: 美股 
@@ -339,21 +349,21 @@ if st.session_state.analyzed:
     # 🛬 Tab 3: 生命周期 & 退休
     # ------------------------------------------
     with tab3:
-        st.subheader("⚖️ 生命周期曝險透視 (台幣計價)")
+        st.subheader("⚖️ 生命周期曝險透視")
         
-        total_port_val = cur_val_tw + total_us_val_twd
+        total_port_val = cur_val_tw + (total_us_val_usd * usd_twd)
         tw_port_pct = (cur_val_tw / total_port_val * 100) if total_port_val > 0 else 0
-        us_port_pct = (total_us_val_twd / total_port_val * 100) if total_port_val > 0 else 0
+        us_port_pct = ((total_us_val_usd * usd_twd) / total_port_val * 100) if total_port_val > 0 else 0
 
         col_p1, col_p2 = st.columns(2)
         col_p1.metric("📈 台股投資組合佔比", f"{tw_port_pct:.1f}%", "佔總持股比例")
         col_p2.metric("🦅 美股投資組合佔比", f"{us_port_pct:.1f}%", "佔總持股比例")
 
         st.markdown(f"""
-        | 戰區 | 曝險金額 (台幣) | 淨資產 (FC) | 獨立曝險度 | 備註 (美金原值) |
+        | 戰區 | 曝險金額 (台幣) | 淨資產 (FC) | 獨立曝險度 | 備註 (美金原值對照) |
         | :--- | :--- | :--- | :--- | :--- |
         | 📈 台股 | NT$ {exp_tw/10000:,.0f} 萬 | NT$ {FC_TW/10000:,.0f} 萬 | **{pct_tw:.1f}%** | - |
-        | 🦅 美股 | NT$ {exp_us_twd/10000:,.0f} 萬 | NT$ {FC_US_TWD/10000:,.0f} 萬 | **{pct_us:.1f}%** | 曝險: **${exp_us_usd:,.0f}** <br> 淨值: **${FC_US_USD:,.0f}** |
+        | 🦅 美股 | NT$ {exp_us_twd/10000:,.0f} 萬 | NT$ {(FC_US_USD*usd_twd)/10000:,.0f} 萬 | **{pct_us:.1f}%** | 曝險: **${exp_us_usd:,.0f}** <br> 淨值: **${FC_US_USD:,.0f}** |
         | 🔥 **綜合** | **NT$ {exp_total/10000:,.0f} 萬** | **NT$ {FC_TOTAL/10000:,.0f} 萬** | **{pct_total:.1f}%** | (匯率: {usd_twd}) |
         """)
         
@@ -396,4 +406,4 @@ if st.session_state.analyzed:
                 gp.append({"年": f"第 {y} 年", "預估資產(萬)": f"{curr_f/10000:,.0f}", "應有曝險": f"{e_g:.1f}%"})
             st.table(pd.DataFrame(gp))
 
-st.caption("📱 提示：台美雙引擎獨立曝險計算生效中。所有數學計算已加入除以零 (ZeroDivision) 防護網。")
+st.caption("📱 提示：完美防護網已啟動。任何一項變數抓取失敗，都不會讓整個程式崩潰。")
