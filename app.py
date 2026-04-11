@@ -7,11 +7,11 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V9.1 - 絕對防禦版
+# 賴賴投資戰情室 V9.2 - 50DMA 靈活版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="💰", layout="wide")
-st.title("🛡️ 賴賴投資戰情室 V9.1")
+st.title("🛡️ 賴賴投資戰情室 V9.2")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -177,7 +177,7 @@ if st.session_state.analyzed:
         c5.metric("獨立實際曝險度", f"{pct_tw:.1f}%", "僅視台幣資產負債")
         
         c6, c7, c8, c9, c10 = st.columns(5)
-        c6.metric("庫存總張數", f"{actual_shares_tw / 1000:,.1f} 張")
+        c6.metric("庫存總股數", f"{actual_shares_tw:,.0f} 股")
         c7.metric("持有均價", f"{actual_cost_tw/actual_shares_tw:.2f}" if actual_shares_tw>0 else "0")
         c8.metric("昨日還原收盤", f"{p_tw_yest:.2f}")
         c9.metric("目前現價", f"{p_tw_curr:.2f}")
@@ -280,15 +280,15 @@ if st.session_state.analyzed:
     with tab2:
         try:
             s_c = float(us_data['Close']['SOXX'].dropna().iloc[-1])
-            s_d = us_data['Close']['SOXX'].dropna().rolling(100).mean().iloc[-1]
+            s_d = us_data['Close']['SOXX'].dropna().rolling(50).mean().iloc[-1]
         except:
             s_c, s_d = 1.0, 1.0
             
         soxl_c = us_live.get('SOXL', {}).get('curr', 0)
         soxl_pred = soxl_c * (1 + (s_d/s_c - 1)*3) if s_c > 0 else 0
         
-        st.markdown(f"### **SOXX 多頭續抱 | 現價:{s_c:.2f} (100DMA:{s_d:.2f} | 差距: {s_c-s_d:+.2f} / {((s_c/s_d-1)*100 if s_d>0 else 0):+.2f}%)**")
-        st.info(f"💡 **預估 SOXL 壓力位：** 若 SOXX 跌回 100DMA，SOXL 預計來到 **${soxl_pred:.2f}** (距現值 {((soxl_pred/soxl_c-1)*100 if soxl_c>0 else 0):.1f}%)")
+        st.markdown(f"### **SOXX 多頭續抱 | 現價:{s_c:.2f} (50DMA:{s_d:.2f} | 差距: {s_c-s_d:+.2f} / {((s_c/s_d-1)*100 if s_d>0 else 0):+.2f}%)**")
+        st.info(f"💡 **預估 SOXL 壓力位：** 若 SOXX 跌回 50DMA，SOXL 預計來到 **${soxl_pred:.2f}** (距現值 {((soxl_pred/soxl_c-1)*100 if soxl_c>0 else 0):.1f}%)")
         cols = st.columns(3)
         for i, (l, t) in enumerate(zip([3,4,5], [30.14, 21.09, 14.77])):
             dist = (soxl_c/t - 1)*100 if t > 0 else 0
@@ -356,14 +356,14 @@ if st.session_state.analyzed:
         us_port_pct = ((total_us_val_usd * usd_twd) / total_port_val * 100) if total_port_val > 0 else 0
 
         col_p1, col_p2 = st.columns(2)
-        col_p1.metric("💰 台股投資組合佔比", f"{tw_port_pct:.1f}%", "佔總持股比例")
-        col_p2.metric("💵 美股投資組合佔比", f"{us_port_pct:.1f}%", "佔總持股比例")
+        col_p1.metric("📈 台股投資組合佔比", f"{tw_port_pct:.1f}%", "佔總持股比例")
+        col_p2.metric("🦅 美股投資組合佔比", f"{us_port_pct:.1f}%", "佔總持股比例")
 
         st.markdown(f"""
         | 戰區 | 曝險金額 (台幣) | 淨資產 (FC) | 獨立曝險度 | 備註 (美金原值對照) |
         | :--- | :--- | :--- | :--- | :--- |
-        | 💰 台股 | NT$ {exp_tw/10000:,.0f} 萬 | NT$ {FC_TW/10000:,.0f} 萬 | **{pct_tw:.1f}%** | - |
-        | 💵 美股 | NT$ {exp_us_twd/10000:,.0f} 萬 | NT$ {(FC_US_USD*usd_twd)/10000:,.0f} 萬 | **{pct_us:.1f}%** | 曝險: **${exp_us_usd:,.0f}** 淨值: **${FC_US_USD:,.0f}** |
+        | 📈 台股 | NT$ {exp_tw/10000:,.0f} 萬 | NT$ {FC_TW/10000:,.0f} 萬 | **{pct_tw:.1f}%** | - |
+        | 🦅 美股 | NT$ {exp_us_twd/10000:,.0f} 萬 | NT$ {(FC_US_USD*usd_twd)/10000:,.0f} 萬 | **{pct_us:.1f}%** | 曝險: **${exp_us_usd:,.0f}** <br> 淨值: **${FC_US_USD:,.0f}** |
         | 🔥 **綜合** | **NT$ {exp_total/10000:,.0f} 萬** | **NT$ {FC_TOTAL/10000:,.0f} 萬** | **{pct_total:.1f}%** | (匯率: {usd_twd}) |
         """)
         
@@ -406,4 +406,4 @@ if st.session_state.analyzed:
                 gp.append({"年": f"第 {y} 年", "預估資產(萬)": f"{curr_f/10000:,.0f}", "應有曝險": f"{e_g:.1f}%"})
             st.table(pd.DataFrame(gp))
 
-st.caption("📱 提示：完美防護網已啟動。任何一項變數抓取失敗，都不會讓整個程式崩潰。")
+st.caption("📱 提示：台美雙引擎曝險已完全獨立計算，淨資產（分母）只參考各自戰區的資金與負債，精準度極大化。")
