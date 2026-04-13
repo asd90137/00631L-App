@@ -7,11 +7,11 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==========================================
-# 賴賴投資戰情室 V9.5 - 戰略進場版 (結合動態警示)
+# 賴賴投資戰情室 V9.2 - 50DMA 靈活版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="💰", layout="wide")
-st.title("🛡️ 賴賴投資戰情室 V9.5")
+st.title("🛡️ 賴賴投資戰情室 V9.2")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -165,30 +165,6 @@ if st.session_state.analyzed:
     # 📈 Tab 1: 台股
     # ------------------------------------------
     with tab1:
-        # --- 🎯 今日操作戰略面板 ---
-        st.subheader("🎯 今日操作戰略 (00631L)")
-        target_val_strat = (FC_TOTAL + (base_m * 12 * hc_years)) * (target_k/100)
-        diff_val_strat = exp_total - target_val_strat
-        
-        if diff_val_strat < 0:
-            strat_signal = "🟢 允許進場 / 建議加碼"
-            # 曝險缺口的一半由台股吸收，因00631L為2倍槓桿，需投入的本金為 (缺口/2) / 2
-            add_cash_tw = abs(diff_val_strat) / 2 / 2
-            strat_amt = f"NT$ {add_cash_tw/10000:,.1f} 萬"
-            strat_shares = f"約 {(add_cash_tw / p_tw_curr / 1000):,.1f} 張" if p_tw_curr > 0 else "0 張"
-        else:
-            strat_signal = "🔴 暫停加碼 / 考慮停利"
-            strat_amt = "NT$ 0 萬"
-            strat_shares = "0 張"
-            
-        c_s1, c_s2, c_s3 = st.columns(3)
-        c_s1.metric("今日進場指示", strat_signal)
-        c_s2.metric("建議加碼本金", strat_amt)
-        c_s3.metric("換算購買張數", strat_shares)
-        
-        st.divider()
-
-        # --- 原有指標 ---
         roi_tw = (cur_val_tw / actual_cost_tw - 1) if actual_cost_tw > 0 else 0
         days_tw = max((datetime.today() - min_date_tw).days, 1) if pd.notnull(min_date_tw) else 1
         ann_roi_tw = ((1+roi_tw)**(365/days_tw) - 1) * 100
@@ -266,7 +242,7 @@ if st.session_state.analyzed:
                     fig1.add_hrect(y0=min(mi*0.9, avg_cost*0.9), y1=avg_cost, fillcolor="red", opacity=0.1, layer="below", line_width=0)
                 fig1.add_annotation(x=rp.idxmax(), y=mx, text=f"高:{mx:.2f}", showarrow=True, ay=-30); fig1.add_annotation(x=rp.idxmin(), y=mi, text=f"低:{mi:.2f}", showarrow=True, ay=30); fig1.add_annotation(x=rp.index[-1], y=lt, text=f"最新:{lt:.2f}", showarrow=True, ax=40)
                 fig1.update_yaxes(range=[min(mi*0.9, avg_cost*0.9) if avg_cost>0 else mi*0.9, max(mx*1.1, avg_cost*1.1) if avg_cost>0 else mx*1.1]); st.plotly_chart(fig1, use_container_width=True)
-                
+
                 # 圖 B
                 st.write("📊 **B. 多空戰術乖離率**")
                 bias = (rp - rp.rolling(20).mean())/rp.rolling(20).mean()*100
@@ -311,11 +287,7 @@ if st.session_state.analyzed:
         soxl_c = us_live.get('SOXL', {}).get('curr', 0)
         soxl_pred = soxl_c * (1 + (s_d/s_c - 1)*3) if s_c > 0 else 0
 
-        if s_c >= s_d:
-            st.markdown(f"### 🟢 **SOXX 多頭續抱 | 現價:{s_c:.2f} (50DMA:{s_d:.2f} | 差距: {s_c-s_d:+.2f} / {((s_c/s_d-1)*100 if s_d>0 else 0):+.2f}%)**")
-        else:
-            st.markdown(f"### 🔴 **SOXX 停利警示 | 現價:{s_c:.2f} (50DMA:{s_d:.2f} | 差距: {s_c-s_d:+.2f} / {((s_c/s_d-1)*100 if s_d>0 else 0):+.2f}%)**")
-
+        st.markdown(f"### **SOXX 多頭續抱 | 現價:{s_c:.2f} (50DMA:{s_d:.2f} | 差距: {s_c-s_d:+.2f} / {((s_c/s_d-1)*100 if s_d>0 else 0):+.2f}%)**")
         st.info(f"💡 **預估 SOXL 壓力位：** 若 SOXX 跌回 50DMA，SOXL 預計來到 **${soxl_pred:.2f}** (距現值 {((soxl_pred/soxl_c-1)*100 if soxl_c>0 else 0):.1f}%)")
         cols = st.columns(3)
         for i, (l, t) in enumerate(zip([3,4,5], [30.14, 21.09, 14.77])):
@@ -415,7 +387,7 @@ if st.session_state.analyzed:
         m_a = (f_a*withdrawal_rate)/12; m_a_now = m_a/((1+inflation_rate)**hc_years)
         st.markdown(f"**📈 情境 A：若工作 {hc_years} 年後退休**")
         ca1, ca2, ca3 = st.columns(3); ca1.metric("屆時滾出資產", f"NT$ {f_a/10000:,.0f} 萬"); ca2.metric("未來每月可領", f"NT$ {m_a:,.0f}"); ca3.metric("約等同現在每月可領", f"NT$ {m_a_now:,.0f}")
-        
+
         st.write(""); st.markdown(f"**🎯 情境 B：反推我想要月領 {target_monthly_now/10000:.0f} 萬(現值) 的退休金**")
         found_y = None; t_f = FC_TOTAL
         for y in range(1, 41):
@@ -434,4 +406,4 @@ if st.session_state.analyzed:
                 gp.append({"年": f"第 {y} 年", "預估資產(萬)": f"{curr_f/10000:,.0f}", "應有曝險": f"{e_g:.1f}%"})
             st.table(pd.DataFrame(gp))
 
-st.caption("📱 提示：台股已新增「今日操作戰略」提示版面。圖示已全面更新。")
+st.caption("📱 提示：台美雙引擎曝險已完全獨立計算，淨資產（分母）只參考各自戰區的資金與負債，精準度極大化。")
