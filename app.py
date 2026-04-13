@@ -5,6 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
+import calendar
 
 # ==========================================
 # 賴賴投資戰情室 V9.2 - 50DMA 靈活版
@@ -185,9 +186,39 @@ if st.session_state.analyzed:
 
         st.write("---")
         
-        # === 變更點 1: 台股頁面新增當前股價、漲跌%、大跌加碼判定 ===
+        # === 變更點 1: 台股頁面新增當前股價、漲跌%、大跌加碼與動態基準 ===
         tw_daily_pct = (p_tw_curr/p_tw_yest-1)*100 if p_tw_yest>0 else 0
-        st.subheader("🚨 大跌加碼輔助判定")
+        
+        # 1. 尋找每月第一個週三 (動態換算下次扣款日)
+        today_d = datetime.today().date()
+        c_cal = calendar.monthcalendar(today_d.year, today_d.month)
+        first_wed = c_cal[0][2] if c_cal[0][2] != 0 else c_cal[1][2]
+        dca_date = datetime(today_d.year, today_d.month, first_wed).date()
+        
+        # 若本月第一個週三已過，直接往後推算下個月的第一個週三
+        if today_d > dca_date:
+            next_m = today_d.month + 1 if today_d.month < 12 else 1
+            next_y = today_d.year if today_d.month < 12 else today_d.year + 1
+            c_cal_next = calendar.monthcalendar(next_y, next_m)
+            first_wed_next = c_cal_next[0][2] if c_cal_next[0][2] != 0 else c_cal_next[1][2]
+            dca_date = datetime(next_y, next_m, first_wed_next).date()
+            
+        is_dca_day = (today_d == dca_date)
+
+        # 2. 動態定期定額基準值計算
+        roi_pct = roi_tw * 100
+        if roi_pct >= 0:
+            # 庫存每賺 1% ➔ 投資減 1% (最多減 20%，保底 8 萬)
+            adj_pct = min(roi_pct * 1.0, 20.0)
+            dynamic_m = max(base_m * (1 - adj_pct / 100.0), 80000.0)
+            adj_str = f"降 {adj_pct:.1f}%"
+        else:
+            # 庫存每賠 1% ➔ 投資加 2% (最多加 100%，上限 20 萬)
+            adj_pct = min(abs(roi_pct) * 2.0, 100.0)
+            dynamic_m = min(base_m * (1 + adj_pct / 100.0), 200000.0)
+            adj_str = f"升 {adj_pct:.1f}%"
+
+        st.subheader("🚨 定期定額與大跌加碼輔助判定")
         d_c1, d_c2, d_c3, d_c4 = st.columns(4)
         d_c1.metric("當前股價", f"{p_tw_curr:.2f}")
         d_c2.metric("今日漲跌 (%)", f"{tw_daily_pct:+.2f}%")
@@ -195,7 +226,14 @@ if st.session_state.analyzed:
         # 預設跌幅達到或超過 -3.0% 觸發大跌加碼提示 (可視策略微調)
         is_dip = tw_daily_pct <= -3.0 
         d_c3.metric("是否執行大跌加碼", "🟢 是" if is_dip else "🔴 否")
-        d_c4.metric("建議加碼金額", f"NT$ {base_m:,.0f}" if is_dip else "NT$ 0")
+        d_c4.metric("大跌建議加碼金額", f"NT$ {base_m:,.0f}" if is_dip else "NT$ 0")
+        
+        st.markdown("##### 📅 每月動態定期定額基準")
+        b_c1, b_c2, b_c3, b_c4 = st.columns(4)
+        b_c1.metric("下次回款日(首週三)", f"{dca_date.strftime('%Y-%m-%d')}", "🟢 今日需扣款" if is_dca_day else None)
+        b_c2.metric("庫存總損益", f"{roi_pct:+.2f}%")
+        b_c3.metric("動態調整幅度", adj_str)
+        b_c4.metric("本期建議扣款(基準值)", f"NT$ {dynamic_m:,.0f}")
         st.write("---")
         # ========================================================
 
