@@ -184,6 +184,21 @@ if st.session_state.analyzed:
         c10.metric("年化報酬率", f"{ann_roi_tw:+.2f}%")
 
         st.write("---")
+        
+        # === 變更點 1: 台股頁面新增當前股價、漲跌%、大跌加碼判定 ===
+        tw_daily_pct = (p_tw_curr/p_tw_yest-1)*100 if p_tw_yest>0 else 0
+        st.subheader("🚨 大跌加碼輔助判定")
+        d_c1, d_c2, d_c3, d_c4 = st.columns(4)
+        d_c1.metric("當前股價", f"{p_tw_curr:.2f}")
+        d_c2.metric("今日漲跌 (%)", f"{tw_daily_pct:+.2f}%")
+        
+        # 預設跌幅達到或超過 -3.0% 觸發大跌加碼提示 (可視策略微調)
+        is_dip = tw_daily_pct <= -3.0 
+        d_c3.metric("是否執行大跌加碼", "🟢 是" if is_dip else "🔴 否")
+        d_c4.metric("建議加碼金額", f"NT$ {base_m:,.0f}" if is_dip else "NT$ 0")
+        st.write("---")
+        # ========================================================
+
         col_p, col_d = st.columns([2, 1])
         with col_p:
             st.write("📈 **台幣資產配置比例 (含負債對照)**")
@@ -216,9 +231,6 @@ if st.session_state.analyzed:
                         '總損益': f"{l_pnl:+,.0f}", '年化報酬': f"{l_ann:+.1f}%", '總報酬': f"{l_roi*100:+.1f}%"
                     })
                 st.dataframe(pd.DataFrame(recs_tw), use_container_width=True, hide_index=True)
-
-        st.write("---")
-        st.link_button("🛒 新增台股交易紀錄 (直接開啟 Google Sheets 手動填寫)", SHEET_TW, use_container_width=True)
 
         st.subheader("🌐 戰術圖表分析")
         try:
@@ -273,6 +285,11 @@ if st.session_state.analyzed:
                         fig3.update_yaxes(range=[min(pi*1.2, -15), max(px*1.2, 20)]); st.plotly_chart(fig3, use_container_width=True)
         except Exception as e:
             st.error("圖表載入中，等待下次網路重試。")
+            
+        # === 變更點 2: 將交易紀錄按鈕移到底部 ===
+        st.divider()
+        st.link_button("🛒 新增台股交易紀錄 (直接開啟 Google Sheets 手動填寫)", SHEET_TW, use_container_width=True)
+        # ========================================
 
     # ------------------------------------------
     # 💵 Tab 2: 美股 
@@ -287,7 +304,13 @@ if st.session_state.analyzed:
         soxl_c = us_live.get('SOXL', {}).get('curr', 0)
         soxl_pred = soxl_c * (1 + (s_d/s_c - 1)*3) if s_c > 0 else 0
 
-        st.markdown(f"### **SOXX 多頭續抱 | 現價:{s_c:.2f} (50DMA:{s_d:.2f} | 差距: {s_c-s_d:+.2f} / {((s_c/s_d-1)*100 if s_d>0 else 0):+.2f}%)**")
+        # === 變更點 3: 美股面板上面 SOXX 多空顯示修正 ===
+        if s_c >= s_d:
+            st.markdown(f"### 🟢 **SOXX 多頭續抱 | 現價:{s_c:.2f} (50DMA:{s_d:.2f} | 差距: {s_c-s_d:+.2f} / {((s_c/s_d-1)*100 if s_d>0 else 0):+.2f}%)**")
+        else:
+            st.markdown(f"### 🔴 **SOXX 停利警示 | 現價:{s_c:.2f} (50DMA:{s_d:.2f} | 差距: {s_c-s_d:+.2f} / {((s_c/s_d-1)*100 if s_d>0 else 0):+.2f}%)**")
+        # =================================================
+
         st.info(f"💡 **預估 SOXL 壓力位：** 若 SOXX 跌回 50DMA，SOXL 預計來到 **${soxl_pred:.2f}** (距現值 {((soxl_pred/soxl_c-1)*100 if soxl_c>0 else 0):.1f}%)")
         cols = st.columns(3)
         for i, (l, t) in enumerate(zip([3,4,5], [30.14, 21.09, 14.77])):
