@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import calendar
 
 # ==========================================
-# 賴賴投資戰情室 V9.2 - 50DMA 靈活版
+# 賴賴投資戰情室 V9.2 - 50DMA 靈活版 (含美股盤前盤後修正)
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="💰", layout="wide")
@@ -130,11 +130,20 @@ if st.session_state.analyzed:
         else:
             shares, cost, first_d = 0, 0, pd.NaT
 
+        # === 修正：美股盤前盤後即時報價 ===
         try:
-            curr_p = float(us_data['Close'][t].dropna().iloc[-1])
-            yest_p = float(us_data['Close'][t].dropna().iloc[-2])
+            # 優先使用 fast_info 抓取即時價 (含盤前/盤後) 與 昨日常規收盤價
+            tkr_us = yf.Ticker(t)
+            curr_p = float(tkr_us.fast_info.last_price)
+            yest_p = float(tkr_us.fast_info.previous_close)
         except:
-            curr_p, yest_p = 0.0, 0.0
+            # 若 fast_info 失敗，退回使用歷史資料備用
+            try:
+                curr_p = float(us_data['Close'][t].dropna().iloc[-1])
+                yest_p = float(us_data['Close'][t].dropna().iloc[-2])
+            except:
+                curr_p, yest_p = 0.0, 0.0
+        # ================================
 
         us_live[t] = {'shares': shares, 'cost': cost, 'curr': curr_p, 'yest': yest_p, 'first_date': first_d}
         total_us_val_usd += shares * curr_p
@@ -324,30 +333,30 @@ if st.session_state.analyzed:
         except Exception as e:
             st.error("圖表載入中，等待下次網路重試。")
             
-        # === 變更點 2: 將交易紀錄按鈕移到底部 ===
         st.divider()
         st.link_button("🛒 新增台股交易紀錄 (直接開啟 Google Sheets 手動填寫)", SHEET_TW, use_container_width=True)
-        # ========================================
 
     # ------------------------------------------
     # 💵 Tab 2: 美股 
     # ------------------------------------------
     with tab2:
+        # === 修正：Tab 2 SOXX 盤前盤後即時報價 ===
         try:
-            s_c = float(us_data['Close']['SOXX'].dropna().iloc[-1])
+            # s_c 使用 fast_info 抓取盤前/盤後即時價，s_d 依然保持用歷史資料算 50DMA
+            s_tkr = yf.Ticker("SOXX")
+            s_c = float(s_tkr.fast_info.last_price) 
             s_d = us_data['Close']['SOXX'].dropna().rolling(50).mean().iloc[-1]
         except:
             s_c, s_d = 1.0, 1.0
+        # ================================
 
         soxl_c = us_live.get('SOXL', {}).get('curr', 0)
         soxl_pred = soxl_c * (1 + (s_d/s_c - 1)*3) if s_c > 0 else 0
 
-        # === 變更點 3: 美股面板上面 SOXX 多空顯示修正 ===
         if s_c >= s_d:
             st.markdown(f"### 🟢 **SOXX 多頭續抱 | 現價:{s_c:.2f} (50DMA:{s_d:.2f} | 差距: {s_c-s_d:+.2f} / {((s_c/s_d-1)*100 if s_d>0 else 0):+.2f}%)**")
         else:
             st.markdown(f"### 🔴 **SOXX 停利警示 | 現價:{s_c:.2f} (50DMA:{s_d:.2f} | 差距: {s_c-s_d:+.2f} / {((s_c/s_d-1)*100 if s_d>0 else 0):+.2f}%)**")
-        # =================================================
 
         st.info(f"💡 **預估 SOXL 壓力位：** 若 SOXX 跌回 50DMA，SOXL 預計來到 **${soxl_pred:.2f}** (距現值 {((soxl_pred/soxl_c-1)*100 if soxl_c>0 else 0):.1f}%)")
         cols = st.columns(3)
