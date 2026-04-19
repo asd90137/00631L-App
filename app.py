@@ -345,7 +345,21 @@ if st.session_state.analyzed:
                     fig2.add_hrect(y0=min(bi*1.2, -20), y1=0, fillcolor="red", opacity=0.1, layer="below", line_width=0)
                     fig2.add_annotation(x=bc.idxmax(), y=bx, text=f"最高:{bx:.1f}%", showarrow=True, ay=-30); fig2.add_annotation(x=bc.idxmin(), y=bi, text=f"最低:{bi:.1f}%", showarrow=True, ay=30); fig2.add_annotation(x=bc.index[-1], y=bl, text=f"最新:{bl:.1f}%", showarrow=True, ax=40)
                     fig2.update_yaxes(range=[min(bi*1.2, -20), max(bx*1.2, 15)]); st.plotly_chart(fig2, use_container_width=True)
-
+                # 圖 C
+                st.write("💰 **C. 庫存真實損益軌跡**")
+                if not temp_tw.empty and '交易類型' in temp_tw.columns:
+                    th = temp_tw.groupby('成交日期')[['庫存股數', '持有成本']].sum().reset_index().set_index('成交日期')
+                    dh = th.reindex(rp.index).fillna(0); ds = dh['庫存股數'].cumsum(); dc = dh['持有成本'].cumsum()
+                    dp = np.where(dc > 0, (ds * rp - dc) / dc * 100, 0)
+                    dp_s = pd.Series(dp, index=rp.index)
+                    fig3 = go.Figure(); fig3.add_trace(go.Scatter(x=dp_s.index, y=dp_s.values, line=dict(color='#247BA0')))
+                    dc_cl = dp_s.dropna()
+                    if not dc_cl.empty:
+                        px, pi, pl = dc_cl.max(), dc_cl.min(), dc_cl.iloc[-1]
+                        fig3.add_hrect(y0=0, y1=max(px*1.2, 10), fillcolor="green", opacity=0.1, layer="below", line_width=0)
+                        fig3.add_hrect(y0=min(pi*1.2, -10), y1=0, fillcolor="red", opacity=0.1, layer="below", line_width=0)
+                        fig3.add_annotation(x=dc_cl.idxmax(), y=px, text=f"最高:{px:.1f}%", showarrow=True, ay=-30); fig3.add_annotation(x=dc_cl.idxmin(), y=pi, text=f"最低:{pi:.1f}%", showarrow=True, ay=30); fig3.add_annotation(x=dc_cl.index[-1], y=pl, text=f"最新:{pl:.1f}%", showarrow=True, ax=40)
+                        fig3.update_yaxes(range=[min(pi*1.2, -15), max(px*1.2, 20)]); st.plotly_chart(fig3, use_container_width=True)
         except Exception as e:
             st.error("圖表載入中，等待下次網路重試。")
             
