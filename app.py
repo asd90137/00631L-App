@@ -8,11 +8,11 @@ from datetime import datetime, timedelta
 import calendar
 
 # ==========================================
-# 賴賴投資戰情室 V9.2 - 50DMA 靈活版 (含美股盤前盤後修正)
+# 賴賴投資戰情室 V9.7 - 終極雙引擎版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="💰", layout="wide")
-st.title("🛡️ 賴賴投資戰情室 V9.2")
+st.title("🛡️ 賴賴投資戰情室 V9.7 (終極雙引擎)")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -75,17 +75,10 @@ if st.button("🚀 啟動戰略掃描", use_container_width=True):
     st.session_state.analyzed = True
 
 if st.session_state.analyzed:
-    # 🛡️ 【絕對防禦機制】預先宣告所有關鍵變數，杜絕 NameError 崩潰
-    cur_val_tw = 0.0
-    actual_shares_tw = 0
-    actual_cost_tw = 0.0
-    p_tw_curr = 0.0
-    p_tw_yest = 0.0
-    min_date_tw = pd.to_datetime('2024-01-01')
-    total_us_val_usd = 0.0
-    total_us_cost_usd = 0.0
-    total_us_val_twd = 0.0
-    FC = 0.0
+    # 🛡️ 【絕對防禦機制】預先宣告所有關鍵變數
+    cur_val_tw = 0.0; actual_shares_tw = 0; actual_cost_tw = 0.0
+    p_tw_curr = 0.0; p_tw_yest = 0.0; min_date_tw = pd.to_datetime('2024-01-01')
+    total_us_val_usd = 0.0; total_us_cost_usd = 0.0; total_us_val_twd = 0.0; FC = 0.0
 
     # --- 核心運算模組 ---
     TICKER_TW = "00631L.TW"
@@ -114,12 +107,12 @@ if st.session_state.analyzed:
 
     cur_val_tw = actual_shares_tw * p_tw_curr
 
-    # 2. 美股計算防呆
-    us_tickers = ["SOXX", "SOXL", "TMF", "BITX"]
-    us_data = yf.download(us_tickers, period="200d", progress=False)
+    # 2. 美股計算防呆 (保留即時報價修正)
+    us_tickers = ["SOXL", "TMF", "BITX"]
+    us_data = yf.download(us_tickers, period="5d", progress=False)
     us_live = {}
 
-    for t in ["SOXL", "TMF", "BITX"]:
+    for t in us_tickers:
         t_data = df_us_raw[df_us_raw['股票代號'] == t].copy() if not df_us_raw.empty and '股票代號' in df_us_raw.columns else pd.DataFrame()
         if not t_data.empty and '交易類型' in t_data.columns:
             t_data['成交日期'] = pd.to_datetime(t_data['成交日期'])
@@ -130,20 +123,16 @@ if st.session_state.analyzed:
         else:
             shares, cost, first_d = 0, 0, pd.NaT
 
-        # === 修正：美股盤前盤後即時報價 ===
         try:
-            # 優先使用 fast_info 抓取即時價 (含盤前/盤後) 與 昨日常規收盤價
             tkr_us = yf.Ticker(t)
             curr_p = float(tkr_us.fast_info.last_price)
             yest_p = float(tkr_us.fast_info.previous_close)
         except:
-            # 若 fast_info 失敗，退回使用歷史資料備用
             try:
                 curr_p = float(us_data['Close'][t].dropna().iloc[-1])
                 yest_p = float(us_data['Close'][t].dropna().iloc[-2])
             except:
                 curr_p, yest_p = 0.0, 0.0
-        # ================================
 
         us_live[t] = {'shares': shares, 'cost': cost, 'curr': curr_p, 'yest': yest_p, 'first_date': first_d}
         total_us_val_usd += shares * curr_p
@@ -152,24 +141,21 @@ if st.session_state.analyzed:
     # ==========================================
     # ⚖️ 隔離式淨資產 (FC) 與曝險計算
     # ==========================================
-    # 1. 🇹🇼 台股專屬
     FC_TW = cur_val_tw + cash - (loan1 + loan2)
     exp_tw = cur_val_tw * 2
     pct_tw = (exp_tw / FC_TW * 100) if FC_TW > 0 else 0
 
-    # 2. 🇺🇸 美股專屬 (美金計價)
     FC_US_USD = total_us_val_usd + us_cash_usd
     exp_us_usd = us_live.get('SOXL',{}).get('curr',0) * us_live.get('SOXL',{}).get('shares',0) * 3 + us_live.get('BITX',{}).get('curr',0) * us_live.get('BITX',{}).get('shares',0) * 2
     pct_us = (exp_us_usd / FC_US_USD * 100) if FC_US_USD > 0 else 0
 
-    # 3. 🔥 綜合全局 (台幣計價)
     total_us_val_twd = FC_US_USD * usd_twd
     FC_TOTAL = FC_TW + total_us_val_twd
     exp_us_twd = exp_us_usd * usd_twd
     exp_total = exp_tw + exp_us_twd
     pct_total = (exp_total / FC_TOTAL * 100) if FC_TOTAL > 0 else 0
 
-    tab1, tab2, tab3 = st.tabs(["💰 台股", "💵 美股", "🛬 生命周期 & 退休"])
+    tab1, tab2, tab3 = st.tabs(["💰 台股 (雙引擎戰略)", "💵 美股 (網格戰略)", "🛬 生命周期 & 退休"])
 
     # ------------------------------------------
     # 📈 Tab 1: 台股
@@ -183,7 +169,8 @@ if st.session_state.analyzed:
         c1.metric("總市值", f"NT$ {cur_val_tw:,.0f}")
         c2.metric("總投入成本", f"NT$ {actual_cost_tw:,.0f}")
         c3.metric("未實現總損益", f"{cur_val_tw-actual_cost_tw:+,.0f}", f"{roi_tw*100:+.2f}%")
-        c4.metric("今日損益", f"NT$ {(p_tw_curr-p_tw_yest)*actual_shares_tw:+,.0f}", f"{(p_tw_curr/p_tw_yest-1)*100:+.2f}%" if p_tw_yest>0 else "0%")
+        tw_daily_pct = (p_tw_curr/p_tw_yest-1)*100 if p_tw_yest>0 else 0
+        c4.metric("今日損益", f"NT$ {(p_tw_curr-p_tw_yest)*actual_shares_tw:+,.0f}", f"{tw_daily_pct:+.2f}%")
         c5.metric("獨立實際曝險度", f"{pct_tw:.1f}%", "僅視台幣資產負債")
 
         c6, c7, c8, c9, c10 = st.columns(5)
@@ -195,56 +182,100 @@ if st.session_state.analyzed:
 
         st.write("---")
         
-        # === 變更點 1: 台股頁面新增當前股價、漲跌%、大跌加碼與動態基準 ===
-        tw_daily_pct = (p_tw_curr/p_tw_yest-1)*100 if p_tw_yest>0 else 0
-        
-        # 1. 尋找每月第一個週三 (動態換算下次扣款日)
+        # ========================================================
+        # 🔥 核心：雙引擎戰略 (動態定額 + 階梯狙擊)
+        # ========================================================
+        st.subheader("🚨 雙引擎作略：動態定額 ＋ 階梯狙擊")
+        roi_pct = roi_tw * 100
+
+        # --- 引擎 1：計算當月動態基準金額 ---
+        if roi_pct >= 0:
+            # 賺錢：最多減 20%
+            adj_pct = min(roi_pct * 1.0, 20.0)
+            dynamic_m = max(base_m * (1 - adj_pct / 100.0), base_m * 0.8)
+            adj_str = f"降 {adj_pct:.1f}% (獲利調節)"
+        else:
+            # 賠錢：最多加 100%
+            adj_pct = min(abs(roi_pct) * 2.0, 100.0)
+            dynamic_m = min(base_m * (1 + adj_pct / 100.0), base_m * 2.0)
+            adj_str = f"升 {adj_pct:.1f}% (虧損加碼)"
+
+        # 推算每月首週三
         today_d = datetime.today().date()
         c_cal = calendar.monthcalendar(today_d.year, today_d.month)
         first_wed = c_cal[0][2] if c_cal[0][2] != 0 else c_cal[1][2]
         dca_date = datetime(today_d.year, today_d.month, first_wed).date()
-        
-        # 若本月第一個週三已過，直接往後推算下個月的第一個週三
         if today_d > dca_date:
             next_m = today_d.month + 1 if today_d.month < 12 else 1
             next_y = today_d.year if today_d.month < 12 else today_d.year + 1
             c_cal_next = calendar.monthcalendar(next_y, next_m)
             first_wed_next = c_cal_next[0][2] if c_cal_next[0][2] != 0 else c_cal_next[1][2]
             dca_date = datetime(next_y, next_m, first_wed_next).date()
-            
+        
         is_dca_day = (today_d == dca_date)
 
-        # 2. 動態定期定額基準值計算
-        roi_pct = roi_tw * 100
-        if roi_pct >= 0:
-            # 庫存每賺 1% ➔ 投資減 1% (最多減 20%，保底 8 萬)
-            adj_pct = min(roi_pct * 1.0, 20.0)
-            dynamic_m = max(base_m * (1 - adj_pct / 100.0), 80000.0)
-            adj_str = f"降 {adj_pct:.1f}%"
-        else:
-            # 庫存每賠 1% ➔ 投資加 2% (最多加 100%，上限 20 萬)
-            adj_pct = min(abs(roi_pct) * 2.0, 100.0)
-            dynamic_m = min(base_m * (1 + adj_pct / 100.0), 200000.0)
-            adj_str = f"升 {adj_pct:.1f}%"
+        # --- 引擎 2：計算單日大跌左側加碼 ---
+        sniper_mult = 0.0
+        sniper_label = "保留現金"
+        
+        if tw_daily_pct <= -15.0:
+            sniper_mult, sniper_label = 4.0, "🔴 重壓 (4.0x)"
+        elif tw_daily_pct <= -10.0:
+            sniper_mult, sniper_label = 3.0, "🔴 恐慌買 (3.0x)"
+        elif tw_daily_pct <= -8.0:
+            sniper_mult, sniper_label = 2.0, "🟠 恐慌買 (2.0x)"
+        elif tw_daily_pct <= -6.0:
+            sniper_mult, sniper_label = 1.5, "🟠 中型修正 (1.5x)"
+        elif tw_daily_pct <= -5.0:
+            sniper_mult, sniper_label = 1.0, "🟡 標準買點 (1.0x)"
+        elif tw_daily_pct <= -4.0:
+            sniper_mult, sniper_label = 0.5, "🟡 波段低接 (0.5x)"
+        elif tw_daily_pct <= -3.0:
+            sniper_mult, sniper_label = 0.25, "🟢 日常試單 (0.25x)"
+            
+        sniper_m = dynamic_m * sniper_mult
 
-        st.subheader("🚨 定期定額與大跌加碼輔助判定")
-        d_c1, d_c2, d_c3, d_c4 = st.columns(4)
-        d_c1.metric("當前股價", f"{p_tw_curr:.2f}")
-        d_c2.metric("今日漲跌 (%)", f"{tw_daily_pct:+.2f}%")
+        # --- 戰略衝突判定 ---
+        final_action_amt = 0
+        action_reason = "觀望不動"
         
-        # 預設跌幅達到或超過 -3.0% 觸發大跌加碼提示 (可視策略微調)
-        is_dip = tw_daily_pct <= -3.0 
-        d_c3.metric("是否執行大跌加碼", "🟢 是" if is_dip else "🔴 否")
-        d_c4.metric("大跌建議加碼金額", f"NT$ {base_m:,.0f}" if is_dip else "NT$ 0")
+        if is_dca_day and sniper_m > 0:
+            final_action_amt = max(dynamic_m, sniper_m)
+            action_reason = "🔥 定額與狙擊撞日 (擇高投入)"
+        elif is_dca_day:
+            final_action_amt = dynamic_m
+            action_reason = "📅 執行每月動態定額"
+        elif sniper_m > 0:
+            final_action_amt = sniper_m
+            action_reason = f"🎯 執行階梯狙擊 ({sniper_label})"
+
+        # --- UI 呈現 ---
+        st.info("💡 **資金鐵則：** 帳戶請隨時鎖定 6 倍現金流，作為戰略預備金。")
+        col_eng1, col_eng2, col_eng3 = st.columns(3)
         
-        st.markdown("##### 📅 每月動態定期定額基準")
-        b_c1, b_c2, b_c3, b_c4 = st.columns(4)
-        b_c1.metric("下次回款日(首週三)", f"{dca_date.strftime('%Y-%m-%d')}", "🟢 今日需扣款" if is_dca_day else None)
-        b_c2.metric("庫存總損益", f"{roi_pct:+.2f}%")
-        b_c3.metric("動態調整幅度", adj_str)
-        b_c4.metric("本期建議扣款(基準值)", f"NT$ {dynamic_m:,.0f}")
+        with col_eng1:
+            st.markdown("#### 📅 引擎一：動態定額")
+            st.write(f"**下次回款日：** {dca_date.strftime('%Y-%m-%d')} {'(🟢 今日!)' if is_dca_day else ''}")
+            st.write(f"**庫存總損益：** {roi_pct:+.2f}%")
+            st.write(f"**調整幅度：** {adj_str}")
+            st.metric("當月動態基準", f"NT$ {dynamic_m:,.0f}")
+            
+        with col_eng2:
+            st.markdown("#### 🎯 引擎二：階梯狙擊")
+            st.write(f"**今日漲跌幅：** {tw_daily_pct:+.2f}%")
+            st.write(f"**觸發位階：** {sniper_label}")
+            st.write("**加碼公式：** 動態基準 × 倍數")
+            st.metric("今日狙擊金額", f"NT$ {sniper_m:,.0f}")
+            
+        with col_eng3:
+            st.markdown("#### 🚀 今日最終行動指示")
+            if final_action_amt > 0:
+                st.success(f"**{action_reason}**")
+                st.metric("建議投入本金", f"NT$ {final_action_amt:,.0f}")
+                st.metric("換算購買股數", f"約 {(final_action_amt / p_tw_curr):,.0f} 股" if p_tw_curr > 0 else "0 股")
+            else:
+                st.warning("☕ 目前未達狙擊標準且非扣款日，請保留現金觀望。")
         st.write("---")
-        # ========================================================
 
         col_p, col_d = st.columns([2, 1])
         with col_p:
@@ -315,21 +346,6 @@ if st.session_state.analyzed:
                     fig2.add_annotation(x=bc.idxmax(), y=bx, text=f"最高:{bx:.1f}%", showarrow=True, ay=-30); fig2.add_annotation(x=bc.idxmin(), y=bi, text=f"最低:{bi:.1f}%", showarrow=True, ay=30); fig2.add_annotation(x=bc.index[-1], y=bl, text=f"最新:{bl:.1f}%", showarrow=True, ax=40)
                     fig2.update_yaxes(range=[min(bi*1.2, -20), max(bx*1.2, 15)]); st.plotly_chart(fig2, use_container_width=True)
 
-                # 圖 C
-                st.write("💰 **C. 庫存真實損益軌跡**")
-                if not temp_tw.empty and '交易類型' in temp_tw.columns:
-                    th = temp_tw.groupby('成交日期')[['庫存股數', '持有成本']].sum().reset_index().set_index('成交日期')
-                    dh = th.reindex(rp.index).fillna(0); ds = dh['庫存股數'].cumsum(); dc = dh['持有成本'].cumsum()
-                    dp = np.where(dc > 0, (ds * rp - dc) / dc * 100, 0)
-                    dp_s = pd.Series(dp, index=rp.index)
-                    fig3 = go.Figure(); fig3.add_trace(go.Scatter(x=dp_s.index, y=dp_s.values, line=dict(color='#247BA0')))
-                    dc_cl = dp_s.dropna()
-                    if not dc_cl.empty:
-                        px, pi, pl = dc_cl.max(), dc_cl.min(), dc_cl.iloc[-1]
-                        fig3.add_hrect(y0=0, y1=max(px*1.2, 10), fillcolor="green", opacity=0.1, layer="below", line_width=0)
-                        fig3.add_hrect(y0=min(pi*1.2, -10), y1=0, fillcolor="red", opacity=0.1, layer="below", line_width=0)
-                        fig3.add_annotation(x=dc_cl.idxmax(), y=px, text=f"最高:{px:.1f}%", showarrow=True, ay=-30); fig3.add_annotation(x=dc_cl.idxmin(), y=pi, text=f"最低:{pi:.1f}%", showarrow=True, ay=30); fig3.add_annotation(x=dc_cl.index[-1], y=pl, text=f"最新:{pl:.1f}%", showarrow=True, ax=40)
-                        fig3.update_yaxes(range=[min(pi*1.2, -15), max(px*1.2, 20)]); st.plotly_chart(fig3, use_container_width=True)
         except Exception as e:
             st.error("圖表載入中，等待下次網路重試。")
             
@@ -337,34 +353,9 @@ if st.session_state.analyzed:
         st.link_button("🛒 新增台股交易紀錄 (直接開啟 Google Sheets 手動填寫)", SHEET_TW, use_container_width=True)
 
     # ------------------------------------------
-    # 💵 Tab 2: 美股 
+    # 💵 Tab 2: 美股 (純淨網格版)
     # ------------------------------------------
     with tab2:
-        # === 修正：Tab 2 SOXX 盤前盤後即時報價 ===
-        try:
-            # s_c 使用 fast_info 抓取盤前/盤後即時價，s_d 依然保持用歷史資料算 50DMA
-            s_tkr = yf.Ticker("SOXX")
-            s_c = float(s_tkr.fast_info.last_price) 
-            s_d = us_data['Close']['SOXX'].dropna().rolling(50).mean().iloc[-1]
-        except:
-            s_c, s_d = 1.0, 1.0
-        # ================================
-
-        soxl_c = us_live.get('SOXL', {}).get('curr', 0)
-        soxl_pred = soxl_c * (1 + (s_d/s_c - 1)*3) if s_c > 0 else 0
-
-        if s_c >= s_d:
-            st.markdown(f"### 🟢 **SOXX 多頭續抱 | 現價:{s_c:.2f} (50DMA:{s_d:.2f} | 差距: {s_c-s_d:+.2f} / {((s_c/s_d-1)*100 if s_d>0 else 0):+.2f}%)**")
-        else:
-            st.markdown(f"### 🔴 **SOXX 停利警示 | 現價:{s_c:.2f} (50DMA:{s_d:.2f} | 差距: {s_c-s_d:+.2f} / {((s_c/s_d-1)*100 if s_d>0 else 0):+.2f}%)**")
-
-        st.info(f"💡 **預估 SOXL 壓力位：** 若 SOXX 跌回 50DMA，SOXL 預計來到 **${soxl_pred:.2f}** (距現值 {((soxl_pred/soxl_c-1)*100 if soxl_c>0 else 0):.1f}%)")
-        cols = st.columns(3)
-        for i, (l, t) in enumerate(zip([3,4,5], [30.14, 21.09, 14.77])):
-            dist = (soxl_c/t - 1)*100 if t > 0 else 0
-            cols[i].metric(f"階梯 {l} 目標", f"${t}", f"距 {dist:.1f}%", delta_color="inverse")
-        st.divider()
-
         us_roi = (total_us_val_usd / total_us_cost_usd - 1) if total_us_cost_usd > 0 else 0
         valid_dates = [v['first_date'] for v in us_live.values() if pd.notnull(v['first_date'])]
         min_date_us = min(valid_dates) if valid_dates else pd.to_datetime('2024-01-01')
@@ -373,6 +364,42 @@ if st.session_state.analyzed:
         total_today_pnl_usd = sum([(info['curr'] - info['yest']) * info['shares'] for info in us_live.values()])
         total_yest_val_usd = sum([info['yest'] * info['shares'] for info in us_live.values()])
         today_pct_us = (total_today_pnl_usd / total_yest_val_usd) if total_yest_val_usd > 0 else 0
+
+        # === 🎯 SOXL 五等份網格與動態停利 ===
+        st.subheader("🎯 SOXL 網格進出戰略")
+        soxl_c = us_live.get('SOXL', {}).get('curr', 0)
+        soxl_avg = us_live.get('SOXL', {}).get('cost', 0) / us_live.get('SOXL', {}).get('shares', 1) if us_live.get('SOXL', {}).get('shares', 0) > 0 else 0
+        
+        st.markdown("""
+        * **🅿️ 資金停泊：** 閒置資金請優先停泊於 **1、2、3 個月期美國國債**，等待大跌機會。
+        """)
+        
+        col_grid1, col_grid2 = st.columns([1.5, 1])
+        with col_grid1:
+            st.markdown("**🔽 往下五階佈局試算**")
+            sell_x = st.number_input("設定賣出基準價或前高 (X) 試算：", value=float(soxl_c) if soxl_c > 0 else 40.0, step=1.0)
+            c_t1, c_t2, c_t3, c_t4, c_t5 = st.columns(5)
+            c_t1.metric("第 1 份 (X)", f"${sell_x:.2f}")
+            c_t2.metric("第 2 份 (0.7X)", f"${sell_x*0.7:.2f}")
+            c_t3.metric("第 3 份 (0.49X)", f"${sell_x*0.49:.2f}")
+            c_t4.metric("第 4 份 (0.343X)", f"${sell_x*0.343:.2f}")
+            c_t5.metric("第 5 份 (0.24X)", f"${sell_x*0.2401:.2f}")
+            
+        with col_grid2:
+            st.markdown("**🚀 動態停利指示**")
+            tranches_deployed = st.radio("目前資金已佈局至第幾份？", ["1~3 份資金", "已達 4~5 份資金"], horizontal=True)
+            
+            if tranches_deployed == "1~3 份資金":
+                tp_target = soxl_avg * 2.5  # +150%
+                st.success("🟢 **階段 A：獲利 150% 停利出場**")
+                st.metric("目標停利價 (估)", f"${tp_target:.2f}" if soxl_avg > 0 else "$0.00", f"距現價 {((tp_target/soxl_c)-1)*100:.1f}%" if soxl_c > 0 else "0%")
+            else:
+                tp_target = soxl_avg * 4.0  # +300%
+                st.error("🔴 **階段 B (深跌區)：獲利 300% 全部賣出**")
+                st.metric("目標停利價 (估)", f"${tp_target:.2f}" if soxl_avg > 0 else "$0.00", f"距現價 {((tp_target/soxl_c)-1)*100:.1f}%" if soxl_c > 0 else "0%")
+
+        st.divider()
+        # =================================
 
         u1, u2, u3, u4, u5 = st.columns(5)
         u1.metric("總市值 (USD)", f"${total_us_val_usd:,.2f}")
@@ -476,4 +503,4 @@ if st.session_state.analyzed:
                 gp.append({"年": f"第 {y} 年", "預估資產(萬)": f"{curr_f/10000:,.0f}", "應有曝險": f"{e_g:.1f}%"})
             st.table(pd.DataFrame(gp))
 
-st.caption("📱 提示：台美雙引擎曝險已完全獨立計算，淨資產（分母）只參考各自戰區的資金與負債，精準度極大化。")
+st.caption("📱 提示：V9.7 終極雙引擎已實裝，台股自動切換定額/狙擊模式，美股網格動態停利計算完成。")
