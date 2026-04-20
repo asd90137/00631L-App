@@ -625,15 +625,24 @@ if st.session_state.analyzed:
         tp_dist = (tp_price / soxl_c - 1) * 100 if soxl_c > 0 and tp_price > 0 else 0
         add_dist = (add_p / soxl_c - 1) * 100 if soxl_c > 0 and add_p > 0 else 0
 
-        c_g1, c_g2, c_g3, c_g4 = st.columns(4)
+        # ========== 🌟 新增的報酬與股價計算 ==========
+        soxl_y = us_live.get('SOXL', {}).get('yest', 0)
+        soxl_daily_pct = (soxl_c / soxl_y - 1) * 100 if soxl_y > 0 else 0
+        cur_roi_pct = (soxl_c / avg_p - 1) * 100 if avg_p > 0 else 0
+        est_profit = (tp_price - avg_p) * tot_s if avg_p > 0 and tot_s > 0 else 0
+
+        # ========== 🌟 擴充為 5 個區塊 ==========
+        c_g1, c_g2, c_g3, c_g4, c_g5 = st.columns(5)
+        
         c_g1.metric("目前進度", f"{cur_tranche_name}")
-        c_g2.metric("平均股價", f"${avg_p:.2f}", f"庫存 {tot_s:,.0f} 股", delta_color="off")
-        c_g3.metric(f"目標停利 ({tp_pct:.0f}%)", f"${tp_price:.2f}", f"差距 {tp_dist:+.2f}%" if soxl_c > 0 and tp_price > 0 else "N/A")
+        c_g2.metric("目前股價", f"${soxl_c:.2f}", f"今日報酬 {soxl_daily_pct:+.2f}%")
+        c_g3.metric("平均股價", f"${avg_p:.2f}", f"目前報酬 {cur_roi_pct:+.2f}% (庫存 {tot_s:,.0f} 股)")
+        c_g4.metric(f"目標停利 ({tp_pct:.0f}%, 預估 +${est_profit:,.0f})", f"${tp_price:.2f}", f"差距 {tp_dist:+.2f}%" if soxl_c > 0 and tp_price > 0 else "N/A")
 
         if add_p > 0:
-            c_g4.metric(f"加碼股價 ({add_s:,.0f} 股)", f"${add_p:.2f}", f"差距 {add_dist:+.2f}%" if soxl_c > 0 else "N/A")
+            c_g5.metric(f"加碼股價 ({add_s:,.0f} 股)", f"${add_p:.2f}", f"差距 {add_dist:+.2f}%" if soxl_c > 0 else "N/A")
         else:
-            c_g4.metric("加碼股價", "已滿倉", "無加碼空間")
+            c_g5.metric("加碼股價", "已滿倉", "無加碼空間")
 
         st.divider()
 
