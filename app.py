@@ -6,15 +6,13 @@ import plotly.graph_objects as go
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import calendar
-import requests
-import time
 
 # ==========================================
-# 賴賴投資戰情室 V9.8 - 零延遲狙擊版 (TWSE直連)
+# 賴賴投資戰情室 V9.7 - 終極雙引擎版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="💰", layout="wide")
-st.title("🛡️ 賴賴投資戰情室 V9.8 (零延遲狙擊)")
+st.title("🛡️ 賴賴投資戰情室 V9.7 (終極雙引擎)")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -86,34 +84,12 @@ if st.session_state.analyzed:
     TICKER_TW = "00631L.TW"
     split_cutoff = pd.to_datetime('2026-03-23')
 
-    # ==========================================
-    # 1. 台股計算防呆 (🚀 升級 TWSE 官方即時 API)
-    # ==========================================
+    # 1. 台股計算防呆
     try:
-        # 使用台灣證交所官方即時 API (完全免費，真正零延遲)
-        twse_url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_00631L.tw&_={int(time.time() * 1000)}"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        res = requests.get(twse_url, headers=headers, timeout=5)
-        data = res.json()
-        
-        if data['msgArray']:
-            info = data['msgArray'][0]
-            # z: 當盤成交價, y: 昨收價
-            curr_str = info.get('z', '')
-            if curr_str == '-':  # 若盤中剛好無成交，抓取第一檔委買價備用
-                curr_str = info.get('b', '').split('_')[0] 
-                
-            raw_curr = float(curr_str)
-            raw_yest = float(info.get('y', 1.0))
-            
-            # 除以 22 股價還原邏輯
-            p_tw_curr = round(raw_curr / (22.0 if raw_curr > 100 else 1.0), 2)
-            p_tw_yest = round(raw_yest / (22.0 if raw_yest > 100 else 1.0), 2)
-        else:
-            raise ValueError("TWSE API 查無資料")
-            
-    except Exception as e:
-        # 若 TWSE 失敗 (例如假日維護或被擋)，退回原本的 yfinance 歷史資料防呆
+        tkr_tw = yf.Ticker(TICKER_TW)
+        p_tw_curr = round(float(tkr_tw.fast_info.last_price) / (22.0 if float(tkr_tw.fast_info.last_price) > 100 else 1.0), 2)
+        p_tw_yest = round(float(tkr_tw.fast_info.previous_close) / (22.0 if float(tkr_tw.fast_info.previous_close) > 100 else 1.0), 2)
+    except:
         try:
             hist_tw = yf.download(TICKER_TW, period="5d", progress=False)
             p_tw_curr = round(float(hist_tw['Close'].dropna().iloc[-1]) / (22.0 if float(hist_tw['Close'].dropna().iloc[-1]) > 100 else 1.0), 2)
@@ -214,14 +190,17 @@ if st.session_state.analyzed:
 
         # --- 引擎 1：計算當月動態基準金額 ---
         if roi_pct >= 0:
+            # 賺錢：最多減 20%
             adj_pct = min(roi_pct * 1.0, 20.0)
             dynamic_m = max(base_m * (1 - adj_pct / 100.0), base_m * 0.8)
             adj_str = f"降 {adj_pct:.1f}% (獲利調節)"
         else:
+            # 賠錢：最多加 100%
             adj_pct = min(abs(roi_pct) * 2.0, 100.0)
             dynamic_m = min(base_m * (1 + adj_pct / 100.0), base_m * 2.0)
             adj_str = f"升 {adj_pct:.1f}% (虧損加碼)"
 
+        # 推算每月首週三
         today_d = datetime.today().date()
         c_cal = calendar.monthcalendar(today_d.year, today_d.month)
         first_wed = c_cal[0][2] if c_cal[0][2] != 0 else c_cal[1][2]
@@ -256,6 +235,7 @@ if st.session_state.analyzed:
             
         sniper_m = dynamic_m * sniper_mult
 
+        # --- 戰略衝突判定 ---
         final_action_amt = 0
         action_reason = "觀望不動"
         
@@ -269,6 +249,7 @@ if st.session_state.analyzed:
             final_action_amt = sniper_m
             action_reason = f"🎯 執行階梯狙擊 ({sniper_label})"
 
+        # --- UI 呈現 ---
         st.info("💡 **資金鐵則：** 帳戶請隨時鎖定 6 倍現金流，作為戰略預備金。")
         col_eng1, col_eng2, col_eng3 = st.columns(3)
         
@@ -364,8 +345,7 @@ if st.session_state.analyzed:
                     fig2.add_hrect(y0=min(bi*1.2, -20), y1=0, fillcolor="red", opacity=0.1, layer="below", line_width=0)
                     fig2.add_annotation(x=bc.idxmax(), y=bx, text=f"最高:{bx:.1f}%", showarrow=True, ay=-30); fig2.add_annotation(x=bc.idxmin(), y=bi, text=f"最低:{bi:.1f}%", showarrow=True, ay=30); fig2.add_annotation(x=bc.index[-1], y=bl, text=f"最新:{bl:.1f}%", showarrow=True, ax=40)
                     fig2.update_yaxes(range=[min(bi*1.2, -20), max(bx*1.2, 15)]); st.plotly_chart(fig2, use_container_width=True)
-
-                # 🔥 圖 C：庫存真實損益軌跡 (完美還原版)
+                # 圖 C
                 st.write("💰 **C. 庫存真實損益軌跡**")
                 if not temp_tw.empty and '交易類型' in temp_tw.columns:
                     th = temp_tw.groupby('成交日期')[['庫存股數', '持有成本']].sum().reset_index().set_index('成交日期')
@@ -379,7 +359,7 @@ if st.session_state.analyzed:
                         fig3.add_hrect(y0=0, y1=max(px*1.2, 10), fillcolor="green", opacity=0.1, layer="below", line_width=0)
                         fig3.add_hrect(y0=min(pi*1.2, -10), y1=0, fillcolor="red", opacity=0.1, layer="below", line_width=0)
                         fig3.add_annotation(x=dc_cl.idxmax(), y=px, text=f"最高:{px:.1f}%", showarrow=True, ay=-30); fig3.add_annotation(x=dc_cl.idxmin(), y=pi, text=f"最低:{pi:.1f}%", showarrow=True, ay=30); fig3.add_annotation(x=dc_cl.index[-1], y=pl, text=f"最新:{pl:.1f}%", showarrow=True, ax=40)
-                        fig3.update_yaxes(range=[min(pi*1.2, -15), max(px*1.2, 20)], ticksuffix="%"); st.plotly_chart(fig3, use_container_width=True)
+                        fig3.update_yaxes(range=[min(pi*1.2, -15), max(px*1.2, 20)]); st.plotly_chart(fig3, use_container_width=True)
         except Exception as e:
             st.error("圖表載入中，等待下次網路重試。")
             
@@ -433,6 +413,7 @@ if st.session_state.analyzed:
                 st.metric("目標停利價 (估)", f"${tp_target:.2f}" if soxl_avg > 0 else "$0.00", f"距現價 {((tp_target/soxl_c)-1)*100:.1f}%" if soxl_c > 0 else "0%")
 
         st.divider()
+        # =================================
 
         u1, u2, u3, u4, u5 = st.columns(5)
         u1.metric("總市值 (USD)", f"${total_us_val_usd:,.2f}")
@@ -536,4 +517,5 @@ if st.session_state.analyzed:
                 gp.append({"年": f"第 {y} 年", "預估資產(萬)": f"{curr_f/10000:,.0f}", "應有曝險": f"{e_g:.1f}%"})
             st.table(pd.DataFrame(gp))
 
-st.caption("📱 提示：V9.8 零延遲版本已啟動。台股連線 TWSE 即時報價，並已恢復高低點標籤損益圖表。")
+st.caption("📱 提示：V9.7 終極雙引擎已實裝，台股自動切換定額/狙擊模式，美股網格動態停利計算完成。")
+
