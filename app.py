@@ -21,7 +21,7 @@ if "analyzed" not in st.session_state:
 # ==========================================
 # 🔑 Fugle API Key 設定
 # ==========================================
-FUGLE_API_KEY = "NGMwZjg5NjctNTdjOS00NTY1LTkwZGUtMGZhNTFlZjIwYjBkIGQ1NWQ2ZGQ3LTljMTQtNDExYi1hZDE3LTNiYTIyNmM2NDA2Yw=="
+FUGLE_API_KEY = st.secrets["FUGLE_API_KEY"]
 
 # ==========================================
 # 📡 Fugle 即時報價函式 (含 yfinance 備援)
