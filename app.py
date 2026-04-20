@@ -9,11 +9,11 @@ import calendar
 import pytz
 
 # ==========================================
-# 賴賴投資戰情室 V9.7 - 終極雙引擎版 (Fugle 即時報價)
+# 賴賴投資戰情室 V9.8 - 防呆獨立讀取版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="💰", layout="wide")
-st.title("🛡️ 賴賴投資戰情室 V9.7 (終極雙引擎)")
+st.title("🛡️ 賴賴投資戰情室 V9.8 (終極雙引擎)")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -26,28 +26,18 @@ FUGLE_API_KEY = st.secrets.get("FUGLE_API_KEY", "")
 # ==========================================
 # 📡 Fugle 即時報價函式 (含 yfinance 備援)
 # ==========================================
-@st.cache_data(ttl=60)  # 每 60 秒才重新呼叫一次，避免超過頻率限制
+@st.cache_data(ttl=60)  
 def get_tw_price(ticker_symbol: str):
-    """
-    優先使用 Fugle MarketData API 取得台股即時報價。
-    若 Fugle 失敗，自動降級使用 yfinance 備援。
-    
-    回傳: (curr_price, prev_close, source_label, update_time_str, age_minutes)
-    """
     tw_tz = pytz.timezone("Asia/Taipei")
     
-    # --- 嘗試 Fugle API ---
     try:
         from fugle_marketdata import RestClient
         client = RestClient(api_key=FUGLE_API_KEY)
-        
-        # 取得即時報價
         quote = client.stock.intraday.quote(symbol=ticker_symbol)
         
         curr_price = quote.get("closePrice") or quote.get("lastPrice") or quote.get("referencePrice", 0)
         prev_close = quote.get("referencePrice", curr_price)
         
-        # 解析更新時間
         update_time_raw = quote.get("lastUpdated") or quote.get("lastTrade", {}).get("time")
         if update_time_raw:
             try:
@@ -65,11 +55,10 @@ def get_tw_price(ticker_symbol: str):
         return float(curr_price), float(prev_close), "🟢 Fugle 即時", time_str, age_min
     
     except ImportError:
-        pass  # fugle_marketdata 未安裝，降級
+        pass  
     except Exception as fugle_err:
         st.sidebar.warning(f"⚠️ Fugle API 失敗：{fugle_err}，改用 yfinance")
     
-    # --- Fugle 失敗：yfinance fast_info 備援 ---
     try:
         yf_ticker = ticker_symbol + ".TW" if not ticker_symbol.endswith(".TW") else ticker_symbol
         tkr = yf.Ticker(yf_ticker)
@@ -95,12 +84,10 @@ def get_tw_price(ticker_symbol: str):
     except Exception:
         pass
     
-    # --- 最終備援：yfinance download 歷史資料 ---
     try:
         yf_ticker = ticker_symbol + ".TW" if not ticker_symbol.endswith(".TW") else ticker_symbol
         hist = yf.download(yf_ticker, period="5d", progress=False)
         
-        # 相容新版 yfinance MultiIndex
         if isinstance(hist.columns, pd.MultiIndex):
             closes = hist["Close"][yf_ticker].dropna()
         else:
@@ -116,10 +103,6 @@ def get_tw_price(ticker_symbol: str):
 
 @st.cache_data(ttl=60)
 def get_us_price(ticker_symbol: str):
-    """
-    取得美股即時報價（yfinance，含 MultiIndex 修正）
-    回傳: (curr_price, prev_close)
-    """
     try:
         tkr = yf.Ticker(ticker_symbol)
         curr_p = float(tkr.fast_info.last_price)
@@ -189,22 +172,44 @@ target_monthly_now = st.sidebar.number_input("9. 目標月領金額 (現值)", v
 inflation_rate = st.sidebar.number_input("10. 預估通膨 (%)", value=2.0) / 100.0
 withdrawal_rate = st.sidebar.number_input("11. 安全提領率 (%)", value=4.0) / 100.0
 
-# --- 🚀 雙帳本雲端同步 ---
+# --- 🚀 雙帳本雲端同步 (獨立錯誤處理) ---
 SHEET_TW = "https://docs.google.com/spreadsheets/d/1yYs-JIW4-8jr8EoyyWlydNrE5Gtd_frWdlMQVdn1VYk/edit?usp=sharing"
 SHEET_US = "https://docs.google.com/spreadsheets/d/1-NPhyuRNWSarFPdgHjUkB9J3smSbn3u3fjUbMhMVyfI/edit?usp=sharing"
 
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
-    df_tw_raw = conn.read(spreadsheet=SHEET_TW, ttl=0)
-    # 修改美股讀取邏輯，分別讀取庫存與SOXL規則頁籤
-    df_us_raw = conn.read(spreadsheet=SHEET_US, worksheet="庫存", ttl=0)
-    df_soxl_rules = conn.read(spreadsheet=SHEET_US, worksheet="SOXL規則", ttl=0)
-    st.sidebar.success("✅ 台美股雙帳本同步成功！")
 except Exception as e:
-    st.sidebar.error("❌ 帳本連結失敗 (請確認權限或略過此錯誤)")
+    st.sidebar.error(f"連線初始化失敗: {e}")
+
+# 1. 獨立讀取台股
+try:
+    df_tw_raw = conn.read(spreadsheet=SHEET_TW, ttl=0)
+    st.sidebar.success("✅ 台股帳本同步成功！")
+except Exception as e:
+    st.sidebar.error(f"❌ 台股帳本讀取失敗: {e}")
     df_tw_raw = pd.DataFrame()
-    df_us_raw = pd.DataFrame()
+
+# 2. 獨立讀取美股庫存
+try:
+    df_us_raw = conn.read(spreadsheet=SHEET_US, worksheet="庫存", ttl=0)
+    st.sidebar.success("✅ 美股庫存同步成功！")
+except Exception as e:
+    # 退回讀取預設的第一頁
+    try:
+        df_us_raw = conn.read(spreadsheet=SHEET_US, ttl=0)
+        st.sidebar.warning("⚠️ 讀不到「庫存」分頁，已改為讀取預設分頁。")
+    except Exception as e2:
+        st.sidebar.error(f"❌ 美股庫存讀取失敗: {e2}")
+        df_us_raw = pd.DataFrame()
+
+# 3. 獨立讀取 SOXL 規則
+try:
+    df_soxl_rules = conn.read(spreadsheet=SHEET_US, worksheet="SOXL規則", ttl=0)
+    st.sidebar.success("✅ SOXL規則同步成功！")
+except Exception as e:
+    st.sidebar.error(f"❌ SOXL規則讀取失敗 ({e})。請確認工作表名稱無空白。")
     df_soxl_rules = pd.DataFrame()
+
 
 if st.button("🚀 啟動戰略掃描", use_container_width=True):
     st.session_state.analyzed = True
@@ -222,19 +227,18 @@ if st.session_state.analyzed:
     total_us_val_twd = 0.0
     FC = 0.0
 
-    TICKER_TW = "00631L"  # Fugle 用不帶 .TW 的代號
-    TICKER_TW_YF = "00631L.TW"  # yfinance 備援用
+    TICKER_TW = "00631L"  
+    TICKER_TW_YF = "00631L.TW"  
     split_cutoff = pd.to_datetime('2026-03-23')
 
     # ==========================================
-    # 1. 台股報價 - Fugle 優先 + 自動除權還原
+    # 1. 台股報價 
     # ==========================================
     raw_curr, raw_yest, price_source, price_time, price_age = get_tw_price(TICKER_TW)
 
     p_tw_curr = round(raw_curr / (22.0 if raw_curr > 100 else 1.0), 2)
     p_tw_yest = round(raw_yest / (22.0 if raw_yest > 100 else 1.0), 2)
 
-    # 顯示報價來源與新鮮度
     if price_age < 60:
         st.caption(f"{price_source} 報價正常｜最後更新：{price_time}（{price_age:.0f} 分鐘前）")
     elif price_age < 480:
@@ -244,7 +248,6 @@ if st.session_state.analyzed:
     else:
         st.caption(f"{price_source}｜使用歷史收盤價，非即時")
 
-    # 台股帳本計算
     temp_tw = df_tw_raw.copy()
     if not temp_tw.empty and '交易類型' in temp_tw.columns:
         temp_tw['成交日期'] = pd.to_datetime(temp_tw['成交日期'])
@@ -256,7 +259,7 @@ if st.session_state.analyzed:
     cur_val_tw = actual_shares_tw * p_tw_curr
 
     # ==========================================
-    # 2. 美股報價（yfinance，含 MultiIndex 修正）
+    # 2. 美股報價
     # ==========================================
     us_tickers = ["SOXL", "TMF", "BITX"]
     us_live = {}
@@ -279,7 +282,7 @@ if st.session_state.analyzed:
         total_us_cost_usd += cost
 
     # ==========================================
-    # ⚖️ 淨資產 (FC) 與曝險計算
+    # ⚖️ 淨資產與曝險計算
     # ==========================================
     FC_TW = cur_val_tw + cash - (loan1 + loan2)
     exp_tw = cur_val_tw * 2
@@ -325,9 +328,6 @@ if st.session_state.analyzed:
 
         st.write("---")
 
-        # ========================================================
-        # 🔥 雙引擎戰略
-        # ========================================================
         st.subheader("🚨 雙引擎作略：動態定額 ＋ 階梯狙擊")
         roi_pct = roi_tw * 100
 
@@ -455,7 +455,6 @@ if st.session_state.analyzed:
         st.subheader("🌐 戰術圖表分析")
         try:
             hist_tw_data = yf.download(TICKER_TW_YF, period="max", progress=False)
-            # 相容新版 MultiIndex
             if isinstance(hist_tw_data.columns, pd.MultiIndex):
                 hist_tw_data = hist_tw_data["Close"][TICKER_TW_YF]
             else:
@@ -470,7 +469,6 @@ if st.session_state.analyzed:
             if not rp.dropna().empty:
                 avg_cost = actual_cost_tw / actual_shares_tw if actual_shares_tw > 0 else 0
 
-                # 圖 A
                 st.write("📈 **A. 價格走勢與還原均價**")
                 fig1 = go.Figure()
                 fig1.add_trace(go.Scatter(x=rp.index, y=rp.values, name="還原價", line=dict(color='#E71D36')))
@@ -488,7 +486,6 @@ if st.session_state.analyzed:
                 ])
                 st.plotly_chart(fig1, use_container_width=True)
 
-                # 圖 B
                 st.write("📊 **B. 多空戰術乖離率**")
                 bias = (rp - rp.rolling(20).mean()) / rp.rolling(20).mean() * 100
                 fig2 = go.Figure()
@@ -506,7 +503,6 @@ if st.session_state.analyzed:
                     fig2.update_yaxes(range=[min(bi * 1.2, -20), max(bx * 1.2, 15)])
                     st.plotly_chart(fig2, use_container_width=True)
 
-                # 圖 C
                 st.write("💰 **C. 庫存真實損益軌跡**")
                 if not temp_tw.empty and '交易類型' in temp_tw.columns:
                     th = temp_tw.groupby('成交日期')[['庫存股數', '持有成本']].sum().reset_index().set_index('成交日期')
@@ -546,7 +542,6 @@ if st.session_state.analyzed:
         total_yest_val_usd = sum([info['yest'] * info['shares'] for info in us_live.values()])
         today_pct_us = (total_today_pnl_usd / total_yest_val_usd) if total_yest_val_usd > 0 else 0
 
-        # === 🎯 SOXL 五等份網格與動態停利 ===
         st.subheader("🎯 SOXL 網格進出戰略 (同步 Google Sheets 規則)")
         soxl_c = us_live.get('SOXL', {}).get('curr', 0)
 
@@ -554,7 +549,6 @@ if st.session_state.analyzed:
         * **🅿️ 資金停泊：** 閒置資金請優先停泊於 **1、2、3 個月期美國國債**，等待大跌機會。
         """)
 
-        # 讀取與計算 SOXL規則
         cur_tranche = 0
         avg_p = 0.0
         tot_s = 0
@@ -563,49 +557,52 @@ if st.session_state.analyzed:
         add_p = 0.0
         add_s = 0
 
+        # 防呆機制：確保資料表不為空，且確保關鍵欄位存在
         if 'df_soxl_rules' in locals() and not df_soxl_rules.empty:
             try:
                 soxl_df = df_soxl_rules.copy()
-                # 確保數值型態 (去除逗號與百分比符號)
                 cols_to_clean = ['實際股價', '實際股數', '實際成本價', '實際停利股價', '預估股價', '預估股數', '停利%']
+                
+                # 清理文字與符號，轉為數字
                 for c in cols_to_clean:
                     if c in soxl_df.columns:
                         if soxl_df[c].dtype == object:
                             soxl_df[c] = soxl_df[c].astype(str).str.replace(r'[\%,]', '', regex=True)
                         soxl_df[c] = pd.to_numeric(soxl_df[c], errors='coerce').fillna(0)
 
-                active_df = soxl_df[soxl_df['實際股數'] > 0]
-                if not active_df.empty:
-                    cur_tranche = len(active_df)
-                    tot_s = active_df['實際股數'].sum()
-                    tot_cost = active_df['實際成本價'].sum()
-                    avg_p = tot_cost / tot_s if tot_s > 0 else 0
+                # 確認 '實際股數' 欄位存在再做篩選
+                if '實際股數' in soxl_df.columns:
+                    active_df = soxl_df[soxl_df['實際股數'] > 0]
+                    if not active_df.empty:
+                        cur_tranche = len(active_df)
+                        tot_s = active_df['實際股數'].sum()
+                        tot_cost = active_df['實際成本價'].sum()
+                        avg_p = tot_cost / tot_s if tot_s > 0 else 0
 
-                    last_row = active_df.iloc[-1]
-                    raw_tp = last_row.get('停利%', 0)
-                    tp_pct = raw_tp * 100 if raw_tp < 10 else raw_tp  # 處理小數點與整數差異
-                    tp_price = last_row.get('實際停利股價', 0)
+                        last_row = active_df.iloc[-1]
+                        raw_tp = last_row.get('停利%', 0)
+                        tp_pct = raw_tp * 100 if raw_tp < 10 else raw_tp  
+                        tp_price = last_row.get('實際停利股價', 0)
 
-                    # 抓取下一階加碼
-                    next_idx = active_df.index[-1] + 1
-                    if next_idx < len(soxl_df):
-                        add_p = soxl_df.iloc[next_idx].get('預估股價', 0)
-                        add_s = soxl_df.iloc[next_idx].get('預估股數', 0)
-                else:
-                    if not soxl_df.empty:
-                        add_p = soxl_df.iloc[0].get('預估股價', 0)
-                        add_s = soxl_df.iloc[0].get('預估股數', 0)
-            except Exception as e:
-                st.error(f"解析 SOXL規則 發生錯誤: {e}")
+                        next_idx = active_df.index[-1] + 1
+                        if next_idx < len(soxl_df):
+                            add_p = soxl_df.iloc[next_idx].get('預估股價', 0)
+                            add_s = soxl_df.iloc[next_idx].get('預估股數', 0)
+                    else:
+                        # 庫存為 0 時，抓取第一列的預估價
+                        if not soxl_df.empty:
+                            add_p = soxl_df.iloc[0].get('預估股價', 0)
+                            add_s = soxl_df.iloc[0].get('預估股數', 0)
+            except Exception as parse_e:
+                st.error(f"⚠️ SOXL規則資料解析異常，可能欄位有缺或含特殊符號: {parse_e}")
 
-        # 計算差距
         tp_dist = (tp_price / soxl_c - 1) * 100 if soxl_c > 0 and tp_price > 0 else 0
         add_dist = (add_p / soxl_c - 1) * 100 if soxl_c > 0 and add_p > 0 else 0
 
         c_g1, c_g2, c_g3, c_g4 = st.columns(4)
         c_g1.metric("目前進度", f"第 {cur_tranche} 份")
         c_g2.metric("平均股價", f"${avg_p:.2f}", f"庫存 {tot_s:,.0f} 股", delta_color="off")
-        c_g3.metric(f"目標停利 ({tp_pct:.0f}%)", f"${tp_price:.2f}", f"差距 {tp_dist:+.2f}%" if soxl_c > 0 else "N/A")
+        c_g3.metric(f"目標停利 ({tp_pct:.0f}%)", f"${tp_price:.2f}", f"差距 {tp_dist:+.2f}%" if soxl_c > 0 and tp_price > 0 else "N/A")
 
         if add_p > 0:
             c_g4.metric(f"加碼股價 ({add_s:,.0f} 股)", f"${add_p:.2f}", f"差距 {add_dist:+.2f}%" if soxl_c > 0 else "N/A")
@@ -613,7 +610,6 @@ if st.session_state.analyzed:
             c_g4.metric("加碼股價", "已滿倉", "無加碼空間")
 
         st.divider()
-        # =================================
 
         u1, u2, u3, u4, u5 = st.columns(5)
         u1.metric("總市值 (USD)", f"${total_us_val_usd:,.2f}")
@@ -717,4 +713,4 @@ if st.session_state.analyzed:
                 gp.append({"年": f"第 {y} 年", "預估資產(萬)": f"{curr_f/10000:,.0f}", "應有曝險": f"{e_g:.1f}%"})
             st.table(pd.DataFrame(gp))
 
-st.caption("📱 提示：V9.7 終極雙引擎已實裝，台股自動切換定額/狙擊模式，美股網格動態停利計算完成。")
+st.caption("📱 提示：V9.8 防呆獨立讀取版，台美股資料同步斷線時會各自隔離，不會導致全盤崩潰。")
