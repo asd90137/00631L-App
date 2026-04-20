@@ -9,11 +9,11 @@ import calendar
 import pytz
 
 # ==========================================
-# 賴賴投資戰情室 V9.9 - SOXL網格精準座標版
+# 賴賴投資戰情室 V10.0 - 動態智能追蹤版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="💰", layout="wide")
-st.title("🛡️ 賴賴投資戰情室 V9.9 (終極雙引擎)")
+st.title("🛡️ 賴賴投資戰情室 V10.0 (終極雙引擎)")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -556,79 +556,85 @@ if st.session_state.analyzed:
         add_p = 0.0
         add_s = 0
 
-        # 防呆機制：確保資料表不為空
+        # 防呆機制：動態尋找名稱符合的欄位
         if 'df_soxl_rules' in locals() and not df_soxl_rules.empty:
             try:
                 soxl_df = df_soxl_rules.copy()
                 
-                # 為了避免標題名稱解析錯誤 (例如 B、C 欄無標題)，我們改用「絕對位置 (iloc)」精準抓取資料
-                # 根據 Google Sheets:
-                # B(1)=第一份, D(3)=預估股價, E(4)=預估股數, G(6)=停利%, 
-                # K(10)=實際股數, L(11)=實際成本價(作為平均股價), M(12)=實際停利股價
-
-                # 1. 抓出K欄 (實際股數)，並清理為數字
-                k_col = soxl_df.iloc[:, 10]
-                if k_col.dtype == object:
-                    k_col = k_col.astype(str).str.replace(r'[^\d.]', '', regex=True)
-                soxl_df['clean_K'] = pd.to_numeric(k_col, errors='coerce').fillna(0)
-
-                # 2. 篩選出已經有投入股數的列
-                active_df = soxl_df[soxl_df['clean_K'] > 0]
-
-                if not active_df.empty:
-                    # 取最新進度 (最後一筆有投入的資料)
-                    last_idx = active_df.index[-1]
-                    last_row = soxl_df.iloc[last_idx]
-
-                    # 目前進度 (B欄)
-                    cur_tranche_name = str(last_row.iloc[1]).strip()
-                    if cur_tranche_name == "nan" or not cur_tranche_name:
-                        cur_tranche_name = f"第 {len(active_df)} 份"
-
-                    # 庫存 (K欄加總，代表目前總投入股數)
-                    tot_s = active_df['clean_K'].sum()
-
-                    # 平均股價 (L欄：實際成本價)
-                    l_val = str(last_row.iloc[11]).replace(',', '').replace('%', '')
-                    avg_p = float(pd.to_numeric(l_val, errors='coerce'))
-                    if np.isnan(avg_p): avg_p = 0.0
-
-                    # 目標停利 (M欄：實際停利股價)
-                    m_val = str(last_row.iloc[12]).replace(',', '').replace('%', '')
-                    tp_price = float(pd.to_numeric(m_val, errors='coerce'))
-                    if np.isnan(tp_price): tp_price = 0.0
-
-                    # 停利% (G欄)
-                    g_val = str(last_row.iloc[6]).replace(',', '').replace('%', '')
-                    tp_pct_raw = float(pd.to_numeric(g_val, errors='coerce'))
-                    if np.isnan(tp_pct_raw): tp_pct_raw = 0.0
-                    tp_pct = tp_pct_raw * 100 if tp_pct_raw < 10 else tp_pct_raw
-
-                    # 下一階加碼 (D、E欄)
-                    next_idx = last_idx + 1
-                    if next_idx < len(soxl_df):
-                        next_row = soxl_df.iloc[next_idx]
-                        
-                        d_val = str(next_row.iloc[3]).replace(',', '')
-                        add_p = float(pd.to_numeric(d_val, errors='coerce'))
-                        if np.isnan(add_p): add_p = 0.0
-                        
-                        e_val = str(next_row.iloc[4]).replace(',', '')
-                        add_s = float(pd.to_numeric(e_val, errors='coerce'))
-                        if np.isnan(add_s): add_s = 0.0
+                # 自動尋找對應的欄位名稱 (防呆：不管欄位怎麼移動，只要標題對就抓得到)
+                col_k = next((c for c in soxl_df.columns if '實際股數' in str(c)), None)
+                col_l = next((c for c in soxl_df.columns if '實際成本價' in str(c)), None)
+                col_m = next((c for c in soxl_df.columns if '實際停利股價' in str(c)), None)
+                col_d = next((c for c in soxl_df.columns if '預估股價' in str(c)), None)
+                col_e = next((c for c in soxl_df.columns if '預估股數' in str(c)), None)
+                col_g = next((c for c in soxl_df.columns if '停利%' in str(c)), None)
+                
+                if col_k is None:
+                    st.error("⚠️ 在 SOXL規則 找不到標題包含「實際股數」的欄位！請確認表單標題列有沒有跑掉。")
                 else:
-                    # 庫存為 0 時，抓取第一列的預估價當作第一筆加碼
-                    if not soxl_df.empty:
-                        first_row = soxl_df.iloc[0]
-                        d_val = str(first_row.iloc[3]).replace(',', '')
-                        add_p = float(pd.to_numeric(d_val, errors='coerce'))
-                        if np.isnan(add_p): add_p = 0.0
+                    # 1. 抓出實際股數，並清理為數字
+                    k_series = soxl_df[col_k].astype(str).str.replace(r'[^\d.]', '', regex=True)
+                    soxl_df['clean_K'] = pd.to_numeric(k_series, errors='coerce').fillna(0)
+                    
+                    # 2. 篩選出已經有投入股數的列
+                    active_df = soxl_df[soxl_df['clean_K'] > 0]
+                    
+                    if not active_df.empty:
+                        # 取最新進度 (最後一筆有投入的資料)
+                        last_idx = active_df.index[-1]
+                        last_row = soxl_df.iloc[last_idx]
                         
-                        e_val = str(first_row.iloc[4]).replace(',', '')
-                        add_s = float(pd.to_numeric(e_val, errors='coerce'))
-                        if np.isnan(add_s): add_s = 0.0
+                        # 目前進度 (通常在 B 欄，索引位置大約是 1)
+                        cur_tranche_name = str(last_row.iloc[1]).strip()
+                        if cur_tranche_name == "nan" or not cur_tranche_name:
+                            cur_tranche_name = f"第 {len(active_df)} 份"
+                            
+                        # 庫存 (加總全部實際股數)
+                        tot_s = active_df['clean_K'].sum()
+                        
+                        # 平均股價 (L欄)
+                        if col_l:
+                            l_val = str(last_row[col_l]).replace(',', '').replace('%', '')
+                            avg_p = float(pd.to_numeric(l_val, errors='coerce'))
+                            if np.isnan(avg_p): avg_p = 0.0
+                            
+                        # 目標停利股價 (M欄)
+                        if col_m:
+                            m_val = str(last_row[col_m]).replace(',', '').replace('%', '')
+                            tp_price = float(pd.to_numeric(m_val, errors='coerce'))
+                            if np.isnan(tp_price): tp_price = 0.0
+                            
+                        # 停利% (G欄)
+                        if col_g:
+                            g_val = str(last_row[col_g]).replace(',', '').replace('%', '')
+                            tp_pct_raw = float(pd.to_numeric(g_val, errors='coerce'))
+                            if np.isnan(tp_pct_raw): tp_pct_raw = 0.0
+                            tp_pct = tp_pct_raw * 100 if tp_pct_raw < 10 else tp_pct_raw
+                            
+                        # 下一階加碼 (D、E欄)
+                        next_idx = last_idx + 1
+                        if next_idx < len(soxl_df):
+                            next_row = soxl_df.iloc[next_idx]
+                            if col_d:
+                                add_p = float(pd.to_numeric(str(next_row[col_d]).replace(',', ''), errors='coerce'))
+                                if np.isnan(add_p): add_p = 0.0
+                            if col_e:
+                                add_s = float(pd.to_numeric(str(next_row[col_e]).replace(',', ''), errors='coerce'))
+                                if np.isnan(add_s): add_s = 0.0
+                    else:
+                        # 完全沒有庫存時，抓第一列預估當加碼
+                        if not soxl_df.empty:
+                            first_row = soxl_df.iloc[0]
+                            if col_d:
+                                add_p = float(pd.to_numeric(str(first_row[col_d]).replace(',', ''), errors='coerce'))
+                                if np.isnan(add_p): add_p = 0.0
+                            if col_e:
+                                add_s = float(pd.to_numeric(str(first_row[col_e]).replace(',', ''), errors='coerce'))
+                                if np.isnan(add_s): add_s = 0.0
             except Exception as parse_e:
-                st.error(f"⚠️ SOXL規則資料解析異常，可能欄位有缺或含特殊符號: {parse_e}")
+                st.error(f"⚠️ 資料解析異常: {parse_e}")
+        else:
+            st.error("⚠️ 【嚴重錯誤】Streamlit 的快取卡住了，沒有讀到『SOXL規則』分頁！\n\n👉 解決辦法：請點擊網頁右上角的「⋮」，選擇「Clear cache」，然後重新整理網頁。")
 
         tp_dist = (tp_price / soxl_c - 1) * 100 if soxl_c > 0 and tp_price > 0 else 0
         add_dist = (add_p / soxl_c - 1) * 100 if soxl_c > 0 and add_p > 0 else 0
@@ -747,4 +753,4 @@ if st.session_state.analyzed:
                 gp.append({"年": f"第 {y} 年", "預估資產(萬)": f"{curr_f/10000:,.0f}", "應有曝險": f"{e_g:.1f}%"})
             st.table(pd.DataFrame(gp))
 
-st.caption("📱 提示：V9.9 防呆精準座標版，SOXL 網格數據完全依賴座標 (A=0, B=1...) 解析，不再受欄位名稱空白影響。")
+st.caption("📱 提示：V10.0 動態智能追蹤版，已加入快取破壞警示與完全無依賴特定座標的追蹤演算法。")
