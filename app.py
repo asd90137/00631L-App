@@ -84,18 +84,43 @@ if st.session_state.analyzed:
     TICKER_TW = "00631L.TW"
     split_cutoff = pd.to_datetime('2026-03-23')
 
-    # 1. 台股計算防呆
+    # 1. 台股計算防呆 + yfinance 狀態顯示
     try:
+        import pytz
         tkr_tw = yf.Ticker(TICKER_TW)
-        p_tw_curr = round(float(tkr_tw.fast_info.last_price) / (22.0 if float(tkr_tw.fast_info.last_price) > 100 else 1.0), 2)
-        p_tw_yest = round(float(tkr_tw.fast_info.previous_close) / (22.0 if float(tkr_tw.fast_info.previous_close) > 100 else 1.0), 2)
+        raw_curr = float(tkr_tw.fast_info.last_price)
+        raw_yest = float(tkr_tw.fast_info.previous_close)
+
+        p_tw_curr = round(raw_curr / (22.0 if raw_curr > 100 else 1.0), 2)
+        p_tw_yest = round(raw_yest / (22.0 if raw_yest > 100 else 1.0), 2)
+
+        # 抓更新時間並判斷資料新鮮度
+        last_ts = tkr_tw.fast_info.get("regularMarketTime", None)
+        if last_ts:
+            tw_tz = pytz.timezone("Asia/Taipei")
+            update_dt = datetime.fromtimestamp(last_ts, tz=tw_tz)
+            now_tw = datetime.now(tz=tw_tz)
+            age_min = (now_tw - update_dt).total_seconds() / 60
+            time_str = update_dt.strftime("%Y-%m-%d %H:%M")
+
+            if age_min < 60:
+                st.caption(f"✅ 00631L 報價正常｜最後更新：{time_str}（{age_min:.0f} 分鐘前）")
+            elif age_min < 60 * 8:
+                st.caption(f"🟡 00631L 報價略舊｜最後更新：{time_str}（{age_min/60:.1f} 小時前）")
+            else:
+                st.caption(f"🔴 00631L 報價可能異常｜最後更新：{time_str}（{age_min/60:.1f} 小時前）")
+        else:
+            st.caption("⚠️ 00631L 無法取得更新時間，報價來源不明")
+
     except:
         try:
             hist_tw = yf.download(TICKER_TW, period="5d", progress=False)
             p_tw_curr = round(float(hist_tw['Close'].dropna().iloc[-1]) / (22.0 if float(hist_tw['Close'].dropna().iloc[-1]) > 100 else 1.0), 2)
             p_tw_yest = round(float(hist_tw['Close'].dropna().iloc[-2]) / (22.0 if float(hist_tw['Close'].dropna().iloc[-2]) > 100 else 1.0), 2)
+            st.caption("🟡 00631L 使用備援歷史資料（fast_info 失敗）")
         except:
             p_tw_curr, p_tw_yest = 1.0, 1.0
+            st.caption("🔴 00631L 股價抓取完全失敗，顯示預設值 1.0，請手動確認")
 
     temp_tw = df_tw_raw.copy()
     if not temp_tw.empty and '交易類型' in temp_tw.columns:
@@ -518,4 +543,3 @@ if st.session_state.analyzed:
             st.table(pd.DataFrame(gp))
 
 st.caption("📱 提示：V9.7 終極雙引擎已實裝，台股自動切換定額/狙擊模式，美股網格動態停利計算完成。")
-
