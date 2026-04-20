@@ -531,43 +531,154 @@ if st.session_state.analyzed:
         st.link_button("🛒 新增台股交易紀錄 (直接開啟 Google Sheets 手動填寫)", SHEET_TW, use_container_width=True)
 
     # ------------------------------------------
-    # 💵 Tab 2: 美股
+    # 💵 Tab 2: 美股 (純淨網格版)
     # ------------------------------------------
     with tab2:
-        st.subheader("💵 美股持倉總覽")
-        us_cols = st.columns(len(us_tickers))
-        for i, t in enumerate(us_tickers):
-            d = us_live[t]
-            val = d['shares'] * d['curr']
-            pnl = val - d['cost']
-            roi = pnl / d['cost'] * 100 if d['cost'] > 0 else 0
-            daily_pct = (d['curr'] / d['yest'] - 1) * 100 if d['yest'] > 0 else 0
-            with us_cols[i]:
-                st.metric(f"{t}", f"${d['curr']:.2f}", f"{daily_pct:+.2f}%")
-                st.write(f"持股：{d['shares']:.0f} 股")
-                st.write(f"市值：${val:,.0f}")
-                st.write(f"損益：{pnl:+,.0f} ({roi:+.1f}%)")
+        us_roi = (total_us_val_usd / total_us_cost_usd - 1) if total_us_cost_usd > 0 else 0
+        valid_dates = [v['first_date'] for v in us_live.values() if pd.notnull(v['first_date'])]
+        min_date_us = min(valid_dates) if valid_dates else pd.to_datetime('2024-01-01')
+        ann_roi_us = ((1+us_roi)**(365/max((datetime.today()-min_date_us).days, 1)) - 1) * 100
+
+        total_today_pnl_usd = sum([(info['curr'] - info['yest']) * info['shares'] for info in us_live.values()])
+        total_yest_val_usd = sum([info['yest'] * info['shares'] for info in us_live.values()])
+        today_pct_us = (total_today_pnl_usd / total_yest_val_usd) if total_yest_val_usd > 0 else 0
+
+        # === 🎯 SOXL 五等份網格與動態停利 ===
+        st.subheader("🎯 SOXL 網格進出戰略")
+        soxl_c = us_live.get('SOXL', {}).get('curr', 0)
+        soxl_avg = us_live.get('SOXL', {}).get('cost', 0) / us_live.get('SOXL', {}).get('shares', 1) if us_live.get('SOXL', {}).get('shares', 0) > 0 else 0
+        
+        st.markdown("""
+        * **🅿️ 資金停泊：** 閒置資金請優先停泊於 **1、2、3 個月期美國國債**，等待大跌機會。
+        """)
+        
+        col_grid1, col_grid2 = st.columns([1.5, 1])
+        with col_grid1:
+            st.markdown("**🔽 往下五階佈局試算**")
+            sell_x = st.number_input("設定賣出基準價或前高 (X) 試算：", value=float(soxl_c) if soxl_c > 0 else 40.0, step=1.0)
+            c_t1, c_t2, c_t3, c_t4, c_t5 = st.columns(5)
+            c_t1.metric("第 1 份 (X)", f"${sell_x:.2f}")
+            c_t2.metric("第 2 份 (0.7X)", f"${sell_x*0.7:.2f}")
+            c_t3.metric("第 3 份 (0.49X)", f"${sell_x*0.49:.2f}")
+            c_t4.metric("第 4 份 (0.343X)", f"${sell_x*0.343:.2f}")
+            c_t5.metric("第 5 份 (0.24X)", f"${sell_x*0.2401:.2f}")
+            
+        with col_grid2:
+            st.markdown("**🚀 動態停利指示**")
+            tranches_deployed = st.radio("目前資金已佈局至第幾份？", ["1~3 份資金", "已達 4~5 份資金"], horizontal=True)
+            
+            if tranches_deployed == "1~3 份資金":
+                tp_target = soxl_avg * 2.5  # +150%
+                st.success("🟢 **階段 A：獲利 150% 停利出場**")
+                st.metric("目標停利價 (估)", f"${tp_target:.2f}" if soxl_avg > 0 else "$0.00", f"距現價 {((tp_target/soxl_c)-1)*100:.1f}%" if soxl_c > 0 else "0%")
+            else:
+                tp_target = soxl_avg * 4.0  # +300%
+                st.error("🔴 **階段 B (深跌區)：獲利 300% 全部賣出**")
+                st.metric("目標停利價 (估)", f"${tp_target:.2f}" if soxl_avg > 0 else "$0.00", f"距現價 {((tp_target/soxl_c)-1)*100:.1f}%" if soxl_c > 0 else "0%")
 
         st.divider()
-        c_us1, c_us2, c_us3 = st.columns(3)
-        c_us1.metric("美股總市值 (USD)", f"${total_us_val_usd:,.0f}")
-        c_us2.metric("美股淨資產 FC_US (USD)", f"${FC_US_USD:,.0f}")
-        c_us3.metric("美股曝險度", f"{pct_us:.1f}%")
-        st.link_button("🛒 新增美股交易紀錄", SHEET_US, use_container_width=True)
+        # =================================
+
+        u1, u2, u3, u4, u5 = st.columns(5)
+        u1.metric("總市值 (USD)", f"${total_us_val_usd:,.2f}")
+        u2.metric("總投入成本", f"${total_us_cost_usd:,.2f}")
+        u3.metric("未實現總損益", f"{(total_us_val_usd-total_us_cost_usd):+,.2f}", f"{us_roi*100:+.2f}%")
+        u4.metric("今日損益", f"${total_today_pnl_usd:+,.2f}", f"{today_pct_us*100:+.2f}%")
+        u5.metric("獨立實際曝險度", f"{pct_us:.1f}%", "僅視美金資產")
+
+        st.write("---")
+        col_up, col_ud = st.columns([2, 1])
+        with col_up:
+            st.write("📈 **美金資產配置比例 (USD)**")
+            us_labels = list(us_live.keys()) + ['美股可用現金']
+            us_values = [info['curr']*info['shares'] for info in us_live.values()] + [us_cash_usd]
+            fig_u = go.Figure(data=[go.Pie(labels=us_labels, values=us_values, hole=.4, texttemplate='%{label}<br>$%{value:,.0f}<br>%{percent}')])
+            fig_u.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0))
+            st.plotly_chart(fig_u, use_container_width=True)
+        with col_ud:
+            st.info(f"💡 **美股獨立淨資產 (FC_US)：**\n\nUS$ {FC_US_USD:,.0f}\n\n*(公式：美股市值 + 美股現金)*")
+
+        st.subheader("📦 個股明細")
+        us_table = []
+        for t, info in us_live.items():
+            avg = info['cost']/info['shares'] if info['shares']>0 else 0
+            l_roi = (info['curr']/avg - 1) if avg>0 else 0
+            days = (datetime.today()-info['first_date']).days if pd.notnull(info['first_date']) else 1
+            l_ann = ((1+l_roi)**(365/max(days,1))-1)*100
+
+            today_pnl_abs = (info['curr'] - info['yest']) * info['shares']
+            total_pnl_abs = (info['curr'] - avg) * info['shares']
+
+            us_table.append({
+                '代號': t, '股數': f"{info['shares']:,.0f}", '均價': f"${avg:.2f}", '成本': f"${info['cost']:,.0f}",
+                '昨日收盤': f"${info['yest']:.2f}", '目前現價': f"${info['curr']:.2f}", 
+                '今日損益': f"${today_pnl_abs:+,.2f} ({(info['curr']/info['yest']-1)*100:+.2f}%)" if info['yest']>0 else "$0 (0.00%)", 
+                '總損益': f"${total_pnl_abs:+,.2f} ({l_roi*100:+.2f}%)", '年化報酬': f"{l_ann:+.2f}%"
+            })
+        st.dataframe(pd.DataFrame(us_table), use_container_width=True, hide_index=True)
+
+        st.write("---")
+        st.link_button("🛒 新增美股交易紀錄 (直接開啟 Google Sheets 手動填寫)", SHEET_US, use_container_width=True)
 
     # ------------------------------------------
-    # 🛬 Tab 3: 生命周期
+    # 🛬 Tab 3: 生命周期 & 退休
     # ------------------------------------------
     with tab3:
-        st.subheader("🛬 生命周期 & 退休規劃")
-        years_to_retirement = hc_years
-        future_monthly_need = target_monthly_now * ((1 + inflation_rate) ** years_to_retirement)
-        required_nest_egg = future_monthly_need * 12 / withdrawal_rate
+        st.subheader("⚖️ 生命周期曝險透視")
 
-        c_r1, c_r2, c_r3 = st.columns(3)
-        c_r1.metric("退休後月需 (未來值)", f"NT$ {future_monthly_need:,.0f}")
-        c_r2.metric("所需退休金規模", f"NT$ {required_nest_egg/10000:,.0f} 萬")
-        c_r3.metric("目前總淨資產 (FC)", f"NT$ {FC_TOTAL/10000:,.0f} 萬")
+        total_port_val = cur_val_tw + (total_us_val_usd * usd_twd)
+        tw_port_pct = (cur_val_tw / total_port_val * 100) if total_port_val > 0 else 0
+        us_port_pct = ((total_us_val_usd * usd_twd) / total_port_val * 100) if total_port_val > 0 else 0
 
-        st.write(f"**距離目標缺口：** NT$ {max(0, required_nest_egg - FC_TOTAL)/10000:,.0f} 萬")
-        st.write(f"**目前整體曝險度：** {pct_total:.1f}%（目標 {target_exp_pct}%）")
+        col_p1, col_p2 = st.columns(2)
+        col_p1.metric("💰 台股投資組合佔比", f"{tw_port_pct:.1f}%", "佔總持股比例")
+        col_p2.metric("💵 美股投資組合佔比", f"{us_port_pct:.1f}%", "佔總持股比例")
+
+        st.markdown(f"""
+        | 戰區 | 曝險金額 (台幣) | 淨資產 (FC) | 獨立曝險度 | 備註 (美金原值對照) |
+        | :--- | :--- | :--- | :--- | :--- |
+        | 💰 台股 | NT$ {exp_tw/10000:,.0f} 萬 | NT$ {FC_TW/10000:,.0f} 萬 | **{pct_tw:.1f}%** | - |
+        | 💵 美股 | NT$ {exp_us_twd/10000:,.0f} 萬 | NT$ {(FC_US_USD*usd_twd)/10000:,.0f} 萬 | **{pct_us:.1f}%** | 曝險: **${exp_us_usd:,.0f}** <br> 淨值: **${FC_US_USD:,.0f}** |
+        | 🔥 **綜合** | **NT$ {exp_total/10000:,.0f} 萬** | **NT$ {FC_TOTAL/10000:,.0f} 萬** | **{pct_total:.1f}%** | (匯率: {usd_twd}) |
+        """)
+
+        W = FC_TOTAL + (base_m * 12 * hc_years); target_val = W * (target_k/100)
+        target_E = (target_val/FC_TOTAL*100) if FC_TOTAL > 0 else 0
+
+        c_tgt, c_act = st.columns(2); c_tgt.metric("🎯 綜合目標曝險度", f"{target_E:.1f}%"); c_act.metric("🔥 綜合實際曝險度", f"{pct_total:.1f}%", f"差距: {(pct_total - target_E):+.1f}%")
+
+        st.subheader("⚖️ 應該如何平衡？")
+        diff_val = exp_total - target_val
+        if diff_val > 0:
+            st.error(f"🚨 **目前總曝險過高！** 建議減少市場部位總價值約 **NT$ {diff_val/10000:,.0f} 萬**")
+            st.write(f"👉 **台股部分：** 若由台股調整，需減碼 00631L 約 NT$ {diff_val/2/10000:,.1f} 萬市值")
+            st.write(f"👉 **美股部分：** 若由美股調整，需減碼 SOXL 約 NT$ {diff_val/3/10000:,.1f} 萬市值")
+        else:
+            st.success(f"🟢 **目前曝險尚有空間！** 可增加市場部位約 **NT$ {abs(diff_val)/10000:,.0f} 萬**")
+
+        st.divider(); st.subheader("☕ 退休終局與提領反推")
+        f_a = FC_TOTAL
+        for _ in range(hc_years): f_a = f_a*1.08 + (base_m*12)
+        m_a = (f_a*withdrawal_rate)/12; m_a_now = m_a/((1+inflation_rate)**hc_years)
+        st.markdown(f"**📈 情境 A：若工作 {hc_years} 年後退休**")
+        ca1, ca2, ca3 = st.columns(3); ca1.metric("屆時滾出資產", f"NT$ {f_a/10000:,.0f} 萬"); ca2.metric("未來每月可領", f"NT$ {m_a:,.0f}"); ca3.metric("約等同現在每月可領", f"NT$ {m_a_now:,.0f}")
+
+        st.write(""); st.markdown(f"**🎯 情境 B：反推我想要月領 {target_monthly_now/10000:.0f} 萬(現值) 的退休金**")
+        found_y = None; t_f = FC_TOTAL
+        for y in range(1, 41):
+            t_f = t_f*1.08 + (base_m*12)
+            req_m = target_monthly_now*((1+inflation_rate)**y)
+            if t_f >= (req_m*12)/withdrawal_rate: found_y = y; final_f = t_f; final_m = req_m; break
+        if found_y:
+            cb1, cb2, cb3 = st.columns(3); cb1.metric("需滾出資產", f"NT$ {final_f/10000:,.0f} 萬"); cb2.metric("未來每月可領", f"NT$ {final_m:,.0f}"); cb3.metric("剩餘年限", f"{found_y} 年")
+
+        with st.expander("🛬 降落時程推演表 (Glide Path)", expanded=False):
+            gp = []; curr_f = FC_TOTAL
+            for y in range(hc_years+1):
+                if y>0: curr_f = curr_f*1.08 + (base_m*12)
+                h_r = max(0, (base_m*12*hc_years) - (base_m*12*y))
+                e_g = ((curr_f + h_r)*target_k/100)/curr_f*100 if curr_f>0 else 0
+                gp.append({"年": f"第 {y} 年", "預估資產(萬)": f"{curr_f/10000:,.0f}", "應有曝險": f"{e_g:.1f}%"})
+            st.table(pd.DataFrame(gp))
+
+st.caption("📱 提示：V9.7 終極雙引擎已實裝，台股自動切換定額/狙擊模式，美股網格動態停利計算完成。")
