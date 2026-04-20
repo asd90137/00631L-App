@@ -9,11 +9,11 @@ import calendar
 import pytz
 
 # ==========================================
-# 賴賴投資戰情室 V10.0 - 動態智能追蹤版
+# 賴賴投資戰情室 V10.1 - 單頁整合極速版
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="💰", layout="wide")
-st.title("🛡️ 賴賴投資戰情室 V10.0 (終極雙引擎)")
+st.title("🛡️ 賴賴投資戰情室 V10.1 (終極雙引擎)")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -172,7 +172,7 @@ target_monthly_now = st.sidebar.number_input("9. 目標月領金額 (現值)", v
 inflation_rate = st.sidebar.number_input("10. 預估通膨 (%)", value=2.0) / 100.0
 withdrawal_rate = st.sidebar.number_input("11. 安全提領率 (%)", value=4.0) / 100.0
 
-# --- 🚀 雙帳本雲端同步 (獨立錯誤處理) ---
+# --- 🚀 雙帳本雲端同步 (合併讀取，大幅加速) ---
 SHEET_TW = "https://docs.google.com/spreadsheets/d/1yYs-JIW4-8jr8EoyyWlydNrE5Gtd_frWdlMQVdn1VYk/edit?usp=sharing"
 SHEET_US = "https://docs.google.com/spreadsheets/d/1-NPhyuRNWSarFPdgHjUkB9J3smSbn3u3fjUbMhMVyfI/edit?usp=sharing"
 
@@ -181,7 +181,7 @@ try:
 except Exception as e:
     st.sidebar.error(f"連線初始化失敗: {e}")
 
-# 1. 獨立讀取台股
+# 1. 讀取台股
 try:
     df_tw_raw = conn.read(spreadsheet=SHEET_TW, ttl=0)
     st.sidebar.success("✅ 台股帳本同步成功！")
@@ -189,25 +189,13 @@ except Exception as e:
     st.sidebar.error(f"❌ 台股帳本讀取失敗: {e}")
     df_tw_raw = pd.DataFrame()
 
-# 2. 獨立讀取美股庫存
+# 2. 讀取美股 (現在所有資料都在第一頁，一次讀完最快)
 try:
-    df_us_raw = conn.read(spreadsheet=SHEET_US, worksheet="庫存", ttl=0)
-    st.sidebar.success("✅ 美股庫存同步成功！")
+    df_us_raw = conn.read(spreadsheet=SHEET_US, ttl=0)
+    st.sidebar.success("✅ 美股資料庫同步成功！(含交易與SOXL網格)")
 except Exception as e:
-    try:
-        df_us_raw = conn.read(spreadsheet=SHEET_US, ttl=0)
-        st.sidebar.warning("⚠️ 讀不到「庫存」分頁，已改為讀取預設分頁。")
-    except Exception as e2:
-        st.sidebar.error(f"❌ 美股庫存讀取失敗: {e2}")
-        df_us_raw = pd.DataFrame()
-
-# 3. 獨立讀取 SOXL 規則
-try:
-    df_soxl_rules = conn.read(spreadsheet=SHEET_US, worksheet="SOXL規則", ttl=0)
-    st.sidebar.success("✅ SOXL規則同步成功！")
-except Exception as e:
-    st.sidebar.error(f"❌ SOXL規則讀取失敗 ({e})。請確認工作表名稱無空白。")
-    df_soxl_rules = pd.DataFrame()
+    st.sidebar.error(f"❌ 美股讀取失敗: {e}")
+    df_us_raw = pd.DataFrame()
 
 
 if st.button("🚀 啟動戰略掃描", use_container_width=True):
@@ -258,7 +246,7 @@ if st.session_state.analyzed:
     cur_val_tw = actual_shares_tw * p_tw_curr
 
     # ==========================================
-    # 2. 美股報價
+    # 2. 美股報價與交易紀錄
     # ==========================================
     us_tickers = ["SOXL", "TMF", "BITX"]
     us_live = {}
@@ -556,55 +544,55 @@ if st.session_state.analyzed:
         add_p = 0.0
         add_s = 0
 
-        # 防呆機制：動態尋找名稱符合的欄位
-        if 'df_soxl_rules' in locals() and not df_soxl_rules.empty:
-            try:
-                soxl_df = df_soxl_rules.copy()
-                
-                # 自動尋找對應的欄位名稱 (防呆：不管欄位怎麼移動，只要標題對就抓得到)
-                col_k = next((c for c in soxl_df.columns if '實際股數' in str(c)), None)
-                col_l = next((c for c in soxl_df.columns if '實際成本價' in str(c)), None)
-                col_m = next((c for c in soxl_df.columns if '實際停利股價' in str(c)), None)
-                col_d = next((c for c in soxl_df.columns if '預估股價' in str(c)), None)
-                col_e = next((c for c in soxl_df.columns if '預估股數' in str(c)), None)
-                col_g = next((c for c in soxl_df.columns if '停利%' in str(c)), None)
-                
-                if col_k is None:
-                    st.error("⚠️ 在 SOXL規則 找不到標題包含「實際股數」的欄位！請確認表單標題列有沒有跑掉。")
-                else:
+        # 防呆機制：直接從第一頁的海量資料中找出 SOXL 規則的欄位
+        if not df_us_raw.empty:
+            soxl_df = df_us_raw.copy()
+            
+            # 動態尋找標題 (即使你貼在 Z 欄，只要標題對就抓得到)
+            col_k = next((c for c in soxl_df.columns if '實際股數' in str(c)), None)
+            col_l = next((c for c in soxl_df.columns if '實際成本價' in str(c)), None)
+            col_m = next((c for c in soxl_df.columns if '實際停利股價' in str(c)), None)
+            col_d = next((c for c in soxl_df.columns if '預估股價' in str(c)), None)
+            col_e = next((c for c in soxl_df.columns if '預估股數' in str(c)), None)
+            col_g = next((c for c in soxl_df.columns if '停利%' in str(c)), None)
+            
+            if col_k is None:
+                st.info("⚠️ 尚未在第一頁讀取到 SOXL 規則！請確認你已經把『SOXL規則』的整張表貼到了第一頁的空白處，並且標題放在第一列 (Row 1)。")
+            else:
+                try:
                     # 1. 抓出實際股數，並清理為數字
                     k_series = soxl_df[col_k].astype(str).str.replace(r'[^\d.]', '', regex=True)
                     soxl_df['clean_K'] = pd.to_numeric(k_series, errors='coerce').fillna(0)
                     
-                    # 2. 篩選出已經有投入股數的列
-                    active_df = soxl_df[soxl_df['clean_K'] > 0]
+                    # 2. 為了避免讀到合併表單底下的空白列，我們用「預估股價」來確保這是有效的一列
+                    if col_d:
+                        d_series = soxl_df[col_d].astype(str).str.replace(r'[^\d.]', '', regex=True)
+                        soxl_df['clean_D'] = pd.to_numeric(d_series, errors='coerce').fillna(0)
+                        valid_grid_df = soxl_df[soxl_df['clean_D'] > 0].reset_index(drop=True)
+                    else:
+                        valid_grid_df = soxl_df.reset_index(drop=True)
+                    
+                    # 3. 篩選出已經有投入實際股數的列
+                    active_df = valid_grid_df[valid_grid_df['clean_K'] > 0]
                     
                     if not active_df.empty:
-                        # 取最新進度 (最後一筆有投入的資料)
                         last_idx = active_df.index[-1]
-                        last_row = soxl_df.iloc[last_idx]
+                        last_row = valid_grid_df.iloc[last_idx]
                         
-                        # 目前進度 (通常在 B 欄，索引位置大約是 1)
-                        cur_tranche_name = str(last_row.iloc[1]).strip()
-                        if cur_tranche_name == "nan" or not cur_tranche_name:
-                            cur_tranche_name = f"第 {len(active_df)} 份"
-                            
-                        # 庫存 (加總全部實際股數)
+                        # 靠資料筆數自動推算第幾份
+                        cur_tranche_name = f"第 {len(active_df)} 份"
                         tot_s = active_df['clean_K'].sum()
                         
-                        # 平均股價 (L欄)
                         if col_l:
                             l_val = str(last_row[col_l]).replace(',', '').replace('%', '')
                             avg_p = float(pd.to_numeric(l_val, errors='coerce'))
                             if np.isnan(avg_p): avg_p = 0.0
                             
-                        # 目標停利股價 (M欄)
                         if col_m:
                             m_val = str(last_row[col_m]).replace(',', '').replace('%', '')
                             tp_price = float(pd.to_numeric(m_val, errors='coerce'))
                             if np.isnan(tp_price): tp_price = 0.0
                             
-                        # 停利% (G欄)
                         if col_g:
                             g_val = str(last_row[col_g]).replace(',', '').replace('%', '')
                             tp_pct_raw = float(pd.to_numeric(g_val, errors='coerce'))
@@ -613,8 +601,8 @@ if st.session_state.analyzed:
                             
                         # 下一階加碼 (D、E欄)
                         next_idx = last_idx + 1
-                        if next_idx < len(soxl_df):
-                            next_row = soxl_df.iloc[next_idx]
+                        if next_idx < len(valid_grid_df):
+                            next_row = valid_grid_df.iloc[next_idx]
                             if col_d:
                                 add_p = float(pd.to_numeric(str(next_row[col_d]).replace(',', ''), errors='coerce'))
                                 if np.isnan(add_p): add_p = 0.0
@@ -622,19 +610,17 @@ if st.session_state.analyzed:
                                 add_s = float(pd.to_numeric(str(next_row[col_e]).replace(',', ''), errors='coerce'))
                                 if np.isnan(add_s): add_s = 0.0
                     else:
-                        # 完全沒有庫存時，抓第一列預估當加碼
-                        if not soxl_df.empty:
-                            first_row = soxl_df.iloc[0]
+                        # 庫存為 0 時，抓第一列預估當加碼
+                        if not valid_grid_df.empty:
+                            first_row = valid_grid_df.iloc[0]
                             if col_d:
                                 add_p = float(pd.to_numeric(str(first_row[col_d]).replace(',', ''), errors='coerce'))
                                 if np.isnan(add_p): add_p = 0.0
                             if col_e:
                                 add_s = float(pd.to_numeric(str(first_row[col_e]).replace(',', ''), errors='coerce'))
                                 if np.isnan(add_s): add_s = 0.0
-            except Exception as parse_e:
-                st.error(f"⚠️ 資料解析異常: {parse_e}")
-        else:
-            st.error("⚠️ 【嚴重錯誤】Streamlit 的快取卡住了，沒有讀到『SOXL規則』分頁！\n\n👉 解決辦法：請點擊網頁右上角的「⋮」，選擇「Clear cache」，然後重新整理網頁。")
+                except Exception as parse_e:
+                    st.error(f"⚠️ 資料解析異常: {parse_e}")
 
         tp_dist = (tp_price / soxl_c - 1) * 100 if soxl_c > 0 and tp_price > 0 else 0
         add_dist = (add_p / soxl_c - 1) * 100 if soxl_c > 0 and add_p > 0 else 0
@@ -753,4 +739,4 @@ if st.session_state.analyzed:
                 gp.append({"年": f"第 {y} 年", "預估資產(萬)": f"{curr_f/10000:,.0f}", "應有曝險": f"{e_g:.1f}%"})
             st.table(pd.DataFrame(gp))
 
-st.caption("📱 提示：V10.0 動態智能追蹤版，已加入快取破壞警示與完全無依賴特定座標的追蹤演算法。")
+st.caption("📱 提示：V10.1 單頁整合極速版，美股資料讀取只需一次 API 請求，防呆抗快取干擾。")
