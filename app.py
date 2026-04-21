@@ -191,10 +191,8 @@ except Exception as e:
 # 2. 讀取美股 (包含自動抓取 I7 可用現金)
 us_cash_usd = 0.0 # 預先宣告全域變數
 try:
-    # 改為無標題讀取，確保能精準抓取絕對座標 (I7 = Index [6, 8])，且不增加額外 API 請求次數
     df_us_raw_no_header = conn.read(spreadsheet=SHEET_US, ttl=0, header=None)
     
-    # 還原原本的 df_us_raw 結構 (以第一列為標題)
     df_us_raw = df_us_raw_no_header.copy()
     if not df_us_raw.empty:
         df_us_raw.columns = df_us_raw.iloc[0]
@@ -202,7 +200,6 @@ try:
     
     st.sidebar.success("✅ 美股資料庫同步成功！(含交易與SOXL網格)")
     
-    # 從無 header 的 DataFrame 中準確抓取 I7 (第 7 列，第 I 欄)
     try:
         if len(df_us_raw_no_header) >= 7 and len(df_us_raw_no_header.columns) >= 9:
             val = str(df_us_raw_no_header.iloc[6, 8]).replace(',', '').replace('$', '').strip()
@@ -261,6 +258,10 @@ if st.session_state.analyzed:
     temp_tw = df_tw_raw.copy()
     if not temp_tw.empty and '交易類型' in temp_tw.columns:
         temp_tw['成交日期'] = pd.to_datetime(temp_tw['成交日期'])
+        # 防呆轉數值
+        temp_tw['庫存股數'] = pd.to_numeric(temp_tw['庫存股數'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
+        temp_tw['持有成本'] = pd.to_numeric(temp_tw['持有成本'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
+        
         temp_tw.loc[temp_tw['交易類型'].str.contains('賣出', na=False), ['庫存股數', '持有成本']] *= -1
         actual_shares_tw = temp_tw['庫存股數'].sum()
         actual_cost_tw = temp_tw['持有成本'].sum()
@@ -278,6 +279,11 @@ if st.session_state.analyzed:
         t_data = df_us_raw[df_us_raw['股票代號'] == t].copy() if not df_us_raw.empty and '股票代號' in df_us_raw.columns else pd.DataFrame()
         if not t_data.empty and '交易類型' in t_data.columns:
             t_data['成交日期'] = pd.to_datetime(t_data['成交日期'])
+            
+            # 🌟 修復錯誤核心：強制將股數與成本從字串轉為浮點數，過濾掉任何逗號
+            t_data['庫存股數'] = pd.to_numeric(t_data['庫存股數'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
+            t_data['持有成本'] = pd.to_numeric(t_data['持有成本'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
+            
             t_data.loc[t_data['交易類型'].str.contains('賣出', na=False), ['庫存股數', '持有成本']] *= -1
             shares = t_data['庫存股數'].sum()
             cost = t_data['持有成本'].sum()
