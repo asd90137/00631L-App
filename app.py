@@ -739,8 +739,8 @@ st.markdown(f"""
 | 🔥 **綜合**<br><span style="font-size:0.85em; color:gray;">(匯率: {usd_twd})</span> | **NT$ {exp_total/10000:,.0f} 萬** | **NT$ {FC_TOTAL/10000:,.0f} 萬** | **{pct_total:.1f}%** |
 """, unsafe_allow_html=True)
 
-        W = FC_TOTAL + (base_m * 12 * hc_years); target_val = W * (target_k/100)
-        target_E = (target_val/FC_TOTAL*100) if FC_TOTAL > 0 else 0
+W = FC_TOTAL + (base_m * 12 * hc_years); target_val = W * (target_k/100)
+target_E = (target_val/FC_TOTAL*100) if FC_TOTAL > 0 else 0
 
         c_tgt, c_act = st.columns(2); c_tgt.metric("🎯 綜合目標曝險度", f"{target_E:.1f}%"); c_act.metric("🔥 綜合實際曝險度", f"{pct_total:.1f}%", f"差距: {(pct_total - target_E):+.1f}%")
 
