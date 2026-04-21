@@ -329,9 +329,9 @@ if st.session_state.analyzed:
 
         c1, c2, c3, c4, c5 = st.columns(5)
         # 除以 10000 並加上「萬」，保留兩位小數
-        c1.metric("總市值", f"NT$ {cur_val_tw / 10000:,.1f} 萬")
-        c2.metric("總投入成本", f"NT$ {actual_cost_tw / 10000:,.1f} 萬")
-        c3.metric("未實現總損益", f"{(cur_val_tw - actual_cost_tw) / 10000:+,.1f} 萬", f"{roi_tw * 100:+.1f}%")
+        c1.metric("總市值", f"{cur_val_tw / 10000:,.0f} 萬")
+        c2.metric("總投入成本", f"{actual_cost_tw / 10000:,.0f} 萬")
+        c3.metric("未實現總損益", f"{(cur_val_tw - actual_cost_tw) / 10000:+,.0f} 萬", f"{roi_tw * 100:+.0f}%")
         
         tw_daily_pct = (p_tw_curr / p_tw_yest - 1) * 100 if p_tw_yest > 0 else 0
         c4.metric("今日損益", f"NT$ {(p_tw_curr - p_tw_yest) * actual_shares_tw:+,.0f}", f"{tw_daily_pct:+.2f}%")
