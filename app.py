@@ -13,7 +13,7 @@ import pytz
 # ==========================================
 
 st.set_page_config(page_title="賴賴終極戰情室", page_icon="💰", layout="wide")
-st.title("🛡️ 賴賴投資戰情室 V10.1 (終極雙引擎)")
+st.title("🛡️ 賴賴投資戰情室 V10.1")
 
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
@@ -344,7 +344,7 @@ if st.session_state.analyzed:
 
         st.write("---")
 
-        st.subheader("🚨 雙引擎作略：動態定額 ＋ 階梯狙擊")
+        st.subheader("🚨 雙引擎戰略")
         roi_pct = roi_tw * 100
 
         if roi_pct >= 0:
@@ -558,7 +558,7 @@ if st.session_state.analyzed:
         total_yest_val_usd = sum([info['yest'] * info['shares'] for info in us_live.values()])
         today_pct_us = (total_today_pnl_usd / total_yest_val_usd) if total_yest_val_usd > 0 else 0
 
-        st.subheader("🎯 SOXL 網格進出戰略 (同步 Google Sheets 規則)")
+        st.subheader("🎯 SOXL 網格進出戰略 ")
         soxl_c = us_live.get('SOXL', {}).get('curr', 0)
 
         st.markdown("""
