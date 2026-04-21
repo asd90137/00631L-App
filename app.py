@@ -667,7 +667,7 @@ if st.session_state.analyzed:
         
         c_g1.metric("目前進度", f"{cur_tranche_name}")
         c_g2.metric("目前股價", f"${soxl_c:.2f}", f"今日報酬 {soxl_daily_pct:+.2f}%")
-        c_g3.metric("平均股價", f"${avg_p:.2f}", f"報酬 {cur_roi_pct:+.2f}% ( {tot_s:,.0f} 股)")
+        c_g3.metric(f"平均股價 ({tot_s:,.0f} 股)", f"${avg_p:.2f}", f"報酬 {cur_roi_pct:+.2f}% ")
         c_g4.metric(f"目標停利 ({tp_pct:.0f}%, 預估 +${est_profit:,.0f})", f"${tp_price:.2f}", f"差距 {tp_dist:+.2f}%" if soxl_c > 0 and tp_price > 0 else "N/A")
 
         if add_p > 0:
@@ -682,7 +682,7 @@ if st.session_state.analyzed:
         u2.metric("總投入成本", f"${total_us_cost_usd:,.2f}")
         u3.metric("未實現總損益", f"{(total_us_val_usd-total_us_cost_usd):+,.2f}", f"{us_roi*100:+.2f}%")
         u4.metric("今日損益", f"${total_today_pnl_usd:+,.2f}", f"{today_pct_us*100:+.2f}%")
-        u5.metric("獨立實際曝險度", f"{pct_us:.1f}%", "僅視美金資產")
+        u5.metric("曝險度", f"{pct_us:.1f}%")
 
         st.write("---")
         col_up, col_ud = st.columns([2, 1])
