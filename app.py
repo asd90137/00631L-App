@@ -734,7 +734,7 @@ if st.session_state.analyzed:
         | 戰區 | 曝險金額 (台幣) | 淨資產 (FC) | 獨立曝險度 | 備註 (美金原值對照) |
         | :--- | :--- | :--- | :--- | :--- |
         | 💰 台股 | NT$ {exp_tw/10000:,.0f} 萬 | NT$ {FC_TW/10000:,.0f} 萬 | **{pct_tw:.1f}%** | - |
-        | 💵 美股 | NT$ {exp_us_twd/10000:,.0f} 萬 | NT$ {(FC_US_USD*usd_twd)/10000:,.0f} 萬 | **{pct_us:.1f}%** | 曝險: **${exp_us_usd:,.0f}** <br> 淨值: **${FC_US_USD:,.0f}** |
+        | 💵 美股 | NT$ {exp_us_twd/10000:,.0f} 萬 | NT$ {(FC_US_USD*usd_twd)/10000:,.0f} 萬 | **{pct_us:.1f}%** | 曝險:${exp_us_usd:,.0f} 淨值: ${FC_US_USD:,.0f} |
         | 🔥 **綜合** | **NT$ {exp_total/10000:,.0f} 萬** | **NT$ {FC_TOTAL/10000:,.0f} 萬** | **{pct_total:.1f}%** | (匯率: {usd_twd}) |
         """)
 
