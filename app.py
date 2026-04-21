@@ -335,7 +335,7 @@ if st.session_state.analyzed:
         
         tw_daily_pct = (p_tw_curr / p_tw_yest - 1) * 100 if p_tw_yest > 0 else 0
         c4.metric("今日損益", f"NT$ {(p_tw_curr - p_tw_yest) * actual_shares_tw:+,.0f}", f"{tw_daily_pct:+.2f}%")
-        c5.metric("獨立實際曝險度", f"{pct_tw:.1f}%", "僅視台幣資產負債")
+        c5.metric("獨立實際曝險度", f"{pct_tw:.1f}%")
 
         c6, c7, c8, c9, c10 = st.columns(5)
         c6.metric("庫存總張數", f"{actual_shares_tw / 1000.0:,.1f} 張")
