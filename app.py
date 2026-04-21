@@ -317,7 +317,7 @@ if st.session_state.analyzed:
     exp_total = exp_tw + exp_us_twd
     pct_total = (exp_total / FC_TOTAL * 100) if FC_TOTAL > 0 else 0
 
-    tab1, tab2, tab3 = st.tabs(["💰 台股 (雙引擎戰略)", "💵 美股 (網格戰略)", "🛬 生命周期 & 退休"])
+    tab1, tab2, tab3 = st.tabs(["💰 台股 ", "💵 美股 ", "🛬 生命周期 & 退休 "])
 
     # ------------------------------------------
     # 📈 Tab 1: 台股
