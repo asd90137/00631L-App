@@ -144,8 +144,7 @@ def calculate_loan_remaining(principal, annual_rate, years, start_date):
 st.sidebar.header("⚙️ 資金與曝險參數")
 base_m_wan = st.sidebar.number_input("1. 基準每月定期定額 (萬)", value=10.0, step=1.0)
 cash_wan = st.sidebar.number_input("2. 目前帳戶可用現金 (萬)", value=200.0, step=10.0)
-us_cash_usd = st.sidebar.number_input("3. 美股可用現金 (USD)", value=345.0, step=10.0)
-target_exp_pct = st.sidebar.number_input("4. 設定目標曝險度 (%)", value=200)
+target_exp_pct = st.sidebar.number_input("3. 設定目標曝險度 (%)", value=200)
 
 base_m = base_m_wan * 10000
 cash = cash_wan * 10000
@@ -165,12 +164,12 @@ with st.sidebar.expander("🏦 貸款細項設定 (自動連動)", expanded=Fals
 
 st.sidebar.divider()
 st.sidebar.header("⚙️ 生命周期與退休規劃")
-usd_twd = st.sidebar.number_input("6. 目前美元匯率", value=32.0)
-hc_years = st.sidebar.number_input("7. 預計剩餘投入年限", value=11)
-target_k = st.sidebar.number_input("8. 一生目標曝險度 (%)", value=83)
-target_monthly_now = st.sidebar.number_input("9. 目標月領金額 (現值)", value=100000, step=10000)
-inflation_rate = st.sidebar.number_input("10. 預估通膨 (%)", value=2.0) / 100.0
-withdrawal_rate = st.sidebar.number_input("11. 安全提領率 (%)", value=4.0) / 100.0
+usd_twd = st.sidebar.number_input("4. 目前美元匯率", value=32.0)
+hc_years = st.sidebar.number_input("5. 預計剩餘投入年限", value=11)
+target_k = st.sidebar.number_input("6. 一生目標曝險度 (%)", value=83)
+target_monthly_now = st.sidebar.number_input("7. 目標月領金額 (現值)", value=100000, step=10000)
+inflation_rate = st.sidebar.number_input("8. 預估通膨 (%)", value=2.0) / 100.0
+withdrawal_rate = st.sidebar.number_input("9. 安全提領率 (%)", value=4.0) / 100.0
 
 # --- 🚀 雙帳本雲端同步 (合併讀取，大幅加速) ---
 SHEET_TW = "https://docs.google.com/spreadsheets/d/1yYs-JIW4-8jr8EoyyWlydNrE5Gtd_frWdlMQVdn1VYk/edit?usp=sharing"
@@ -189,10 +188,34 @@ except Exception as e:
     st.sidebar.error(f"❌ 台股帳本讀取失敗: {e}")
     df_tw_raw = pd.DataFrame()
 
-# 2. 讀取美股 (現在所有資料都在第一頁，一次讀完最快)
+# 2. 讀取美股 (包含自動抓取 I7 可用現金)
+us_cash_usd = 0.0 # 預先宣告全域變數
 try:
-    df_us_raw = conn.read(spreadsheet=SHEET_US, ttl=0)
+    # 改為無標題讀取，確保能精準抓取絕對座標 (I7 = Index [6, 8])，且不增加額外 API 請求次數
+    df_us_raw_no_header = conn.read(spreadsheet=SHEET_US, ttl=0, header=None)
+    
+    # 還原原本的 df_us_raw 結構 (以第一列為標題)
+    df_us_raw = df_us_raw_no_header.copy()
+    if not df_us_raw.empty:
+        df_us_raw.columns = df_us_raw.iloc[0]
+        df_us_raw = df_us_raw[1:].reset_index(drop=True)
+    
     st.sidebar.success("✅ 美股資料庫同步成功！(含交易與SOXL網格)")
+    
+    # 從無 header 的 DataFrame 中準確抓取 I7 (第 7 列，第 I 欄)
+    try:
+        if len(df_us_raw_no_header) >= 7 and len(df_us_raw_no_header.columns) >= 9:
+            val = str(df_us_raw_no_header.iloc[6, 8]).replace(',', '').replace('$', '').strip()
+            us_cash_usd = float(pd.to_numeric(val, errors='coerce'))
+            if np.isnan(us_cash_usd):
+                us_cash_usd = 0.0
+        else:
+            us_cash_usd = 0.0
+        st.sidebar.info(f"💵 自動讀取美股可用現金 (I7): ${us_cash_usd:,.2f}")
+    except Exception as e:
+        st.sidebar.warning(f"⚠️ 無法解析 I7 現金欄位: {e}")
+        us_cash_usd = 0.0
+        
 except Exception as e:
     st.sidebar.error(f"❌ 美股讀取失敗: {e}")
     df_us_raw = pd.DataFrame()
