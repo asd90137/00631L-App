@@ -253,7 +253,7 @@ if st.session_state.analyzed:
     elif price_age < 9999:
         st.caption(f"{price_source} 報價可能異常｜最後更新：{price_time}（{price_age/60:.1f} 小時前）")
     else:
-        st.caption(f"{price_source}｜使用歷史收盤價，非即時")
+        st.caption(f"{price_source}｜使用歷史收盤價，非即時（最後資料時間：{price_time}）")
 
     temp_tw = df_tw_raw.copy()
     if not temp_tw.empty and '交易類型' in temp_tw.columns:
