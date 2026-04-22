@@ -40,20 +40,26 @@ def get_tw_price(ticker_symbol: str):
         
         update_time_raw = quote.get("lastUpdated") or quote.get("lastTrade", {}).get("time")
         update_time_raw = quote.get("lastUpdated") or quote.get("lastTrade", {}).get("time")
+        update_time_raw = quote.get("lastUpdated") or quote.get("lastTrade", {}).get("time")
         if update_time_raw:
             try:
-                # 🚀 修正時間戳判定，解決 1970 年 Bug
+                # 🚀 修正時間戳判定（解決 1970 年 Bug 與 8 小時時區差）
                 if isinstance(update_time_raw, (int, float)):
+                    # 加入 utc=True，讓系統知道這是 UTC 時間
                     if update_time_raw > 1e14:
-                        dt_obj = pd.to_datetime(update_time_raw, unit='us')
+                        dt_obj = pd.to_datetime(update_time_raw, unit='us', utc=True)
                     elif update_time_raw > 1e11:
-                        dt_obj = pd.to_datetime(update_time_raw, unit='ms')
+                        dt_obj = pd.to_datetime(update_time_raw, unit='ms', utc=True)
                     else:
-                        dt_obj = pd.to_datetime(update_time_raw, unit='s')
+                        dt_obj = pd.to_datetime(update_time_raw, unit='s', utc=True)
+                    
+                    # 確實將 UTC 時間轉換為台灣時間 (+8)
+                    update_dt = dt_obj.astimezone(tw_tz)
                 else:
+                    # 如果是字串格式
                     dt_obj = pd.to_datetime(update_time_raw)
+                    update_dt = dt_obj.tz_localize("Asia/Taipei") if dt_obj.tzinfo is None else dt_obj.astimezone(tw_tz)
 
-                update_dt = dt_obj.tz_localize("Asia/Taipei") if dt_obj.tzinfo is None else dt_obj.astimezone(tw_tz)
                 now_tw = datetime.now(tz=tw_tz)
                 age_min = (now_tw - update_dt).total_seconds() / 60
                 time_str = update_dt.strftime("%Y-%m-%d %H:%M")
