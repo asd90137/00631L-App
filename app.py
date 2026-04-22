@@ -729,8 +729,8 @@ if st.session_state.analyzed:
         us_port_pct = ((total_us_val_usd * usd_twd) / total_port_val * 100) if total_port_val > 0 else 0
 
         col_p1, col_p2 = st.columns(2)
-        col_p1.metric("💰 台股投資組合佔比", f"{tw_port_pct:.1f}%", "佔總持股比例")
-        col_p2.metric("💵 美股投資組合佔比", f"{us_port_pct:.1f}%", "佔總持股比例")
+        col_p1.metric("💰 台股投資組合佔比", f"{tw_port_pct:.1f}%")
+        col_p2.metric("💵 美股投資組合佔比", f"{us_port_pct:.1f}%")
 
         st.markdown(f"""
 | 戰區 | 曝險金額 (台幣) | 淨資產 (FC) | 獨立曝險度 |
