@@ -334,7 +334,7 @@ if st.session_state.analyzed:
         c3.metric("未實現總損益", f"{(cur_val_tw - actual_cost_tw) / 10000:+,.0f} 萬", f"{roi_tw * 100:+.0f}%")
         
         tw_daily_pct = (p_tw_curr / p_tw_yest - 1) * 100 if p_tw_yest > 0 else 0
-        c4.metric("今日損益", f"NT$ {(p_tw_curr - p_tw_yest) * actual_shares_tw:+,.0f}", f"{tw_daily_pct:+.2f}%")
+        c4.metric("今日損益", f"{(p_tw_curr - p_tw_yest) * actual_shares_tw:+,.0f}", f"{tw_daily_pct:+.2f}%")
         c5.metric("獨立實際曝險度", f"{pct_tw:.1f}%")
 
         c6, c7, c8, c9, c10 = st.columns(5)
