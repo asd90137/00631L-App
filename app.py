@@ -439,21 +439,27 @@ if st.session_state.analyzed:
             # 這裡將負債轉為負值，以便在瀑布圖中向下扣除
             total_loan = -(loan1 + loan2)
             
+            # 先計算出最終淨額，交給 y 陣列讓標籤去讀取
+            net_total = cur_val_tw + cash + total_loan
+            
             fig_w = go.Figure(go.Waterfall(
                 name = "淨值分析",
                 orientation = "v",
-                # 設定 X 軸標籤
                 x = ["00631L 市值", "可用現金", "信貸總餘額", "台股獨立淨資產"],
-                # relative 表示相對增減，total 表示最後計算出的總計
                 measure = ["relative", "relative", "relative", "total"],
-                # 設定數值
-                y = [cur_val_tw, cash, total_loan, 0],
-                textposition = "outside",
+                # 將最後一個值換成 net_total，解決顯示為 0 的問題
+                y = [cur_val_tw, cash, total_loan, net_total],
+                
+                # 設定數字顯示在柱子內部
+                textposition = "inside",
                 texttemplate = "NT$ %{y:,.0f}",
-                # 設定顏色：增加（資產）用綠色，減少（負債）用紅色，最後總計用藍色
-                increasing = {"marker":{"color":"#2EC4B6"}},
-                decreasing = {"marker":{"color":"#E71D36"}},
-                totals = {"marker":{"color":"#1B9AAA"}},
+                # 將字體改為白色並放大，在有顏色的柱狀圖內更易讀
+                textfont = dict(color="white", size=14),
+                
+                # 調整顏色，讓「總淨值」的顏色與「資產」明顯分開
+                increasing = {"marker":{"color":"#2EC4B6"}}, # 湖水綠 (資產增加)
+                decreasing = {"marker":{"color":"#E71D36"}}, # 警示紅 (負債減少)
+                totals = {"marker":{"color":"#FF9F1C"}},     # 亮橘黃 (總計淨額)
                 connector = {"line":{"color":"#5C5C5C", "width":1, "dash":"dot"}}
             ))
 
@@ -461,7 +467,6 @@ if st.session_state.analyzed:
                 height=400,
                 margin=dict(l=10, r=10, t=10, b=10),
                 showlegend=False,
-                # 讓數值顯示更清晰
                 yaxis=dict(title="金額 (NT$)")
             )
             
