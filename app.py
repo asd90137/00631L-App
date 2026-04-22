@@ -199,22 +199,25 @@ try:
     df_tw_raw = conn.read(spreadsheet=SHEET_TW, ttl=0)
     st.sidebar.success("✅ 台股帳本同步成功！")
     
-    # 🚀 精準讀取 J2 (基準定額) 與 K2 (可用現金)
-    try:
-        param_df = conn.read(spreadsheet=SHEET_TW, range="台股部分!J2:K2", header=None, ttl=0)
-    except:
-        # 若找不到「台股部分」名稱，退回預設讀取 J2:K2
-        param_df = conn.read(spreadsheet=SHEET_TW, range="J2:K2", header=None, ttl=0)
-        
-    if not param_df.empty:
-        v_j = str(param_df.iloc[0, 0]).replace(',', '').replace('$', '').strip()
-        v_k = str(param_df.iloc[0, 1]).replace(',', '').replace('$', '').strip()
-        
-        parsed_j = float(pd.to_numeric(v_j, errors='coerce'))
-        parsed_k = float(pd.to_numeric(v_k, errors='coerce'))
-        
-        if not np.isnan(parsed_j): base_m_wan = parsed_j
-        if not np.isnan(parsed_k): cash_wan = parsed_k
+    # 🚀 修正版：直接從已經下載的 df_tw_raw 提取 J2 (第10欄) 與 K2 (第11欄)
+    if not df_tw_raw.empty:
+        try:
+            # 確保欄位寬度足夠，避免抓不到 K 欄報錯
+            while len(df_tw_raw.columns) < 11:
+                df_tw_raw[f"Unnamed_{len(df_tw_raw.columns)}"] = np.nan
+                
+            # iloc[0, 9] 代表第一筆資料的 J 欄、iloc[0, 10] 代表 K 欄
+            v_j = str(df_tw_raw.iloc[0, 9]).replace(',', '').replace('$', '').strip()
+            v_k = str(df_tw_raw.iloc[0, 10]).replace(',', '').replace('$', '').strip()
+            
+            parsed_j = float(pd.to_numeric(v_j, errors='coerce'))
+            parsed_k = float(pd.to_numeric(v_k, errors='coerce'))
+            
+            if not np.isnan(parsed_j): base_m_wan = parsed_j
+            if not np.isnan(parsed_k): cash_wan = parsed_k
+            
+        except Exception as parse_e:
+            st.sidebar.warning(f"⚠️ 參數欄位解析失敗，改用預設值。({parse_e})")
         
     st.sidebar.info(f"🏦 自動載入台股參數：\n基準定額 **{base_m_wan:,.0f} 萬** | 現金 **{cash_wan:,.0f} 萬**")
 
