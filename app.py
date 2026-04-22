@@ -454,7 +454,7 @@ if st.session_state.analyzed:
                 textposition = "inside",
                 texttemplate = "NT$ %{y:,.0f}",
                 # 將字體改為白色並放大，在有顏色的柱狀圖內更易讀
-                textfont = dict(color="white", size=14),
+                textfont = dict(color="black", size=14),
                 
                 # 調整顏色，讓「總淨值」的顏色與「資產」明顯分開
                 increasing = {"marker":{"color":"#2EC4B6"}}, # 湖水綠 (資產增加)
