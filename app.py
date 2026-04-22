@@ -678,9 +678,9 @@ if st.session_state.analyzed:
         st.divider()
 
         u1, u2, u3, u4, u5 = st.columns(5)
-        u1.metric("總市值 (USD)", f"${total_us_val_usd:,.2f}")
-        u2.metric("總投入成本", f"${total_us_cost_usd:,.2f}")
-        u3.metric("未實現總損益", f"{(total_us_val_usd-total_us_cost_usd):+,.2f}", f"{us_roi*100:+.2f}%")
+        u1.metric("總市值 (USD)", f"${total_us_val_usd:,.0f}")
+        u2.metric("總投入成本", f"${total_us_cost_usd:,.0f}")
+        u3.metric("未實現總損益", f"{(total_us_val_usd-total_us_cost_usd):+,.0f}", f"{us_roi*100:+.2f}%")
         u4.metric("今日損益", f"${total_today_pnl_usd:+,.2f}", f"{today_pct_us*100:+.2f}%")
         u5.metric("曝險度", f"{pct_us:.1f}%")
 
