@@ -329,18 +329,18 @@ if st.session_state.analyzed:
 
         c1, c2, c3, c4, c5 = st.columns(5)
         # 除以 10000 並加上「萬」，保留兩位小數
-        c1.metric("總市值", f"{cur_val_tw / 10000:,.0f} 萬")
-        c2.metric("總投入成本", f"{actual_cost_tw / 10000:,.0f} 萬")
-        c3.metric("未實現總損益", f"{(cur_val_tw - actual_cost_tw) / 10000:+,.0f} 萬", f"{roi_tw * 100:+.0f}%")
+        c1.metric("市值", f"{cur_val_tw / 10000:,.0f} 萬")
+        c2.metric("成本", f"{actual_cost_tw / 10000:,.0f} 萬")
+        c3.metric("未實現損益", f"{(cur_val_tw - actual_cost_tw) / 10000:+,.0f} 萬", f"{roi_tw * 100:+.0f}%")
         
         tw_daily_pct = (p_tw_curr / p_tw_yest - 1) * 100 if p_tw_yest > 0 else 0
         c4.metric("今日損益", f"{(p_tw_curr - p_tw_yest) * actual_shares_tw:+,.0f}", f"{tw_daily_pct:+.2f}%")
-        c5.metric("獨立實際曝險度", f"{pct_tw:.1f}%")
+        c5.metric("曝險度", f"{pct_tw:.1f}%")
 
         c6, c7, c8, c9, c10 = st.columns(5)
-        c6.metric("庫存總張數", f"{actual_shares_tw / 1000.0:,.1f} 張")
-        c7.metric("持有均價", f"{actual_cost_tw / actual_shares_tw:.2f}" if actual_shares_tw > 0 else "0")
-        c8.metric("昨日還原收盤", f"{p_tw_yest:.2f}")
+        c6.metric("庫存張數", f"{actual_shares_tw / 1000.0:,.1f} 張")
+        c7.metric("均價", f"{actual_cost_tw / actual_shares_tw:.2f}" if actual_shares_tw > 0 else "0")
+        c8.metric("昨日收盤", f"{p_tw_yest:.2f}")
         c9.metric("目前現價", f"{p_tw_curr:.2f}")
         c10.metric("年化報酬率", f"{ann_roi_tw:+.2f}%")
 
