@@ -431,7 +431,8 @@ if st.session_state.analyzed:
                 st.warning("☕ 目前未達狙擊標準且非扣款日，請保留現金觀望。")
 
         st.write("---")
-        
+
+        col_p, col_d = st.columns([2, 1])
         with col_p:
             st.write("📊 **台幣資產與淨值變動 (瀑布圖)**")
             
