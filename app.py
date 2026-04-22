@@ -39,8 +39,6 @@ def get_tw_price(ticker_symbol: str):
         prev_close = quote.get("referencePrice", curr_price)
         
         update_time_raw = quote.get("lastUpdated") or quote.get("lastTrade", {}).get("time")
-        update_time_raw = quote.get("lastUpdated") or quote.get("lastTrade", {}).get("time")
-        update_time_raw = quote.get("lastUpdated") or quote.get("lastTrade", {}).get("time")
         if update_time_raw:
             try:
                 # 🚀 修正時間戳判定（解決 1970 年 Bug 與 8 小時時區差）
@@ -159,13 +157,8 @@ def calculate_loan_remaining(principal, annual_rate, years, start_date):
 
 
 # --- 側邊欄：全局參數 ---
-st.sidebar.header("⚙️ 資金與曝險參數")
-base_m_wan = st.sidebar.number_input("1. 基準每月定期定額 (萬)", value=10.0, step=1.0)
-cash_wan = st.sidebar.number_input("2. 目前帳戶可用現金 (萬)", value=200.0, step=10.0)
-target_exp_pct = st.sidebar.number_input("3. 設定目標曝險度 (%)", value=200)
-
-base_m = base_m_wan * 10000
-cash = cash_wan * 10000
+st.sidebar.header("🏦 資金與貸款設定")
+# (已移除介面手動輸入：基準每月定期定額、帳戶可用現金、目標曝險度，改為由下方 Google Sheets 自動讀取)
 
 with st.sidebar.expander("🏦 貸款細項設定 (自動連動)", expanded=False):
     l1_p = st.number_input("信貸一總額", value=2830000)
@@ -198,13 +191,41 @@ try:
 except Exception as e:
     st.sidebar.error(f"連線初始化失敗: {e}")
 
-# 1. 讀取台股
+# 1. 讀取台股 (並同步抓取 J2, K2 參數)
+base_m_wan = 10.0  # 預設值防呆
+cash_wan = 200.0   # 預設值防呆
+
 try:
     df_tw_raw = conn.read(spreadsheet=SHEET_TW, ttl=0)
     st.sidebar.success("✅ 台股帳本同步成功！")
+    
+    # 🚀 精準讀取 J2 (基準定額) 與 K2 (可用現金)
+    try:
+        param_df = conn.read(spreadsheet=SHEET_TW, range="台股部分!J2:K2", header=None, ttl=0)
+    except:
+        # 若找不到「台股部分」名稱，退回預設讀取 J2:K2
+        param_df = conn.read(spreadsheet=SHEET_TW, range="J2:K2", header=None, ttl=0)
+        
+    if not param_df.empty:
+        v_j = str(param_df.iloc[0, 0]).replace(',', '').replace('$', '').strip()
+        v_k = str(param_df.iloc[0, 1]).replace(',', '').replace('$', '').strip()
+        
+        parsed_j = float(pd.to_numeric(v_j, errors='coerce'))
+        parsed_k = float(pd.to_numeric(v_k, errors='coerce'))
+        
+        if not np.isnan(parsed_j): base_m_wan = parsed_j
+        if not np.isnan(parsed_k): cash_wan = parsed_k
+        
+    st.sidebar.info(f"🏦 自動載入台股參數：\n基準定額 **{base_m_wan:,.0f} 萬** | 現金 **{cash_wan:,.0f} 萬**")
+
 except Exception as e:
     st.sidebar.error(f"❌ 台股帳本讀取失敗: {e}")
     df_tw_raw = pd.DataFrame()
+
+# 根據試算表取得的參數計算實際金額
+base_m = base_m_wan * 10000
+cash = cash_wan * 10000
+
 
 # 2. 讀取美股 (包含自動抓取 I7 可用現金)
 us_cash_usd = 0.0 # 預先宣告全域變數
