@@ -289,11 +289,11 @@ if st.session_state.analyzed:
     p_tw_yest = round(raw_yest / (22.0 if raw_yest > 100 else 1.0), 2)
 
     if price_age < 60:
-        st.caption(f"{price_source} 報價正常｜最後更新：{price_time}（{price_age:.0f} 分鐘前）")
+        st.caption(f"{price_source} 正常｜{price_time}（{price_age:.0f} 分鐘前）")
     elif price_age < 480:
-        st.caption(f"{price_source} 報價略舊｜最後更新：{price_time}（{price_age/60:.1f} 小時前）")
+        st.caption(f"{price_source} 略舊｜{price_time}（{price_age/60:.1f} 小時前）")
     elif price_age < 9999:
-        st.caption(f"{price_source} 報價可能異常｜最後更新：{price_time}（{price_age/60:.1f} 小時前）")
+        st.caption(f"{price_source} 可能異常｜{price_time}（{price_age/60:.1f} 小時前）")
     else:
         st.caption(f"{price_source}｜使用歷史收盤價，非即時（最後資料時間：{price_time}）")
 
