@@ -224,13 +224,13 @@ def _get_us_session_label(now_et) -> str:
 
 
 @st.cache_data(ttl=CONFIG.PRICE_TTL)
-def fetch_us_price(ticker: str, alpaca_key: str = "", alpaca_secret: str = "") -> dict:
+def fetch_us_price(ticker: str) -> dict:
     import pytz, datetime as dt_mod
     et_tz = pytz.timezone("America/New_York")
     now_et = dt_mod.datetime.now(et_tz)
     session = _get_us_session_label(now_et)
 
-    # ── 1. yfinance 盤前盤後精準抓取 (升級為主引擎) ──
+    # ── yfinance 盤前盤後精準抓取 (純依賴 yfinance) ──
     try:
         tkr = yf.Ticker(ticker)
         # 強制開啟 prepost=True，抓取包含盤前盤後的最近 2 天 1 分鐘 K 線
@@ -248,34 +248,9 @@ def fetch_us_price(ticker: str, alpaca_key: str = "", alpaca_secret: str = "") -
             return dict(curr=curr, prev=prev, session=session,
                         source="🟢 yfinance (含盤外)", time_str=time_str)
     except Exception as e:
-        # 如果 yfinance 被擋或出錯，靜默往下走備援
         pass
 
-    # ── 2. Alpaca (降級為備援，因為免費版 IEX 盤外報價極少) ──
-    if alpaca_key and alpaca_secret:
-        try:
-            from alpaca.data.historical import StockHistoricalDataClient
-            from alpaca.data.requests import StockSnapshotRequest
-            from alpaca.data.enums import DataFeed
-
-            client = StockHistoricalDataClient(alpaca_key, alpaca_secret)
-            snap_req = StockSnapshotRequest(symbol_or_symbols=ticker, feed=DataFeed.IEX)
-            snap = client.get_stock_snapshot(snap_req)
-            s = snap.get(ticker)
-            if s:
-                prev_price  = float(s.previous_daily_bar.close) if s.previous_daily_bar else 0.0
-                trade_price = float(s.latest_trade.price) if s.latest_trade else 0.0
-                trade_time  = s.latest_trade.timestamp if s.latest_trade else None
-                curr = trade_price
-                time_str = trade_time.astimezone(et_tz).strftime("%Y-%m-%d %H:%M ET") if trade_time else "N/A"
-                return dict(curr=curr, prev=prev_price, session=session,
-                            source=f"🟡 Alpaca (備援)", time_str=time_str)
-        except ImportError:
-            pass
-        except Exception:
-            pass
-
-    # ── 3. 完全失敗的最後防線 ──
+    # ── 完全失敗的最後防線 ──
     return dict(curr=0.0, prev=0.0, session="❓",
                 source="❌ 完全失敗", time_str="N/A")
 
@@ -1113,13 +1088,9 @@ def main():
 
     # ── API Keys（在 cache 函式外讀取，避免 cache 內 st.secrets 不穩定）──
     fugle_key     = st.secrets.get("FUGLE_API_KEY", "")
-    alpaca_key    = st.secrets.get("ALPACA_API_KEY", "")
-    alpaca_secret = st.secrets.get("ALPACA_SECRET_KEY", "")
 
     if not fugle_key:
         st.sidebar.warning("⚠️ 未設定 FUGLE_API_KEY，台股報價將使用 yfinance")
-    if not (alpaca_key and alpaca_secret):
-        st.sidebar.warning("⚠️ 未設定 ALPACA_API_KEY/SECRET，美股報價將使用 yfinance")
 
     # ── 資料擷取 ──
     tw_price = fetch_tw_price(CONFIG.TICKER_TW, fugle_key=fugle_key)
@@ -1136,7 +1107,7 @@ def main():
     # 解析台股交易
     tw_trade = parse_tw_trades(df_tw_raw)
 
-    # 解析美股交易 + 即時報價（Alpaca 含盤前盤後）
+    # 解析美股交易 + 即時報價
     us_live = {}
     us_session = ""
     import pytz, datetime as dt_mod
@@ -1145,7 +1116,7 @@ def main():
 
     for t in CONFIG.US_TICKERS:
         trade = parse_us_trades(df_us_raw, t)
-        price = fetch_us_price(t, alpaca_key=alpaca_key, alpaca_secret=alpaca_secret)
+        price = fetch_us_price(t)
         if not us_session:
             us_session = price.get("session", "")
         us_live[t] = {
