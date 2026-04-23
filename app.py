@@ -8,7 +8,8 @@ from datetime import datetime, timedelta
 import calendar
 import pytz
 import streamlit as st
-# ... 其他 import 保持不變 ...
+import streamlit as st
+# ... (其他 import) ...
 
 # ==========================================
 # 時間複利戰情室 V11.0 - 模組化整理版
@@ -17,17 +18,6 @@ import streamlit as st
 
 # ① 設定分頁標題
 st.set_page_config(page_title="時間複利戰情室 | 賴賴", page_icon="📈", layout="wide")
-
-# ② 顯示戰情室大標題 (取代原本可能有的 st.title)
-st.markdown("""
-    <div style='text-align: center; margin-top: -30px; margin-bottom: 20px;'>
-        <h1 style='font-size: 50px; margin-bottom: 0px;'>時間複利戰情室</h1>
-        <p style='color: #888888; font-size: 20px; letter-spacing: 5px; font-weight: 300;'>
-            ─────── 長線決策大腦 ╳ 絕對紀律執行 ───────
-        </p>
-    </div>
-""", unsafe_allow_html=True)
-st.divider()
 
 # ──────────────────────────────────────────
 # ① 全域常數（CONFIG）
