@@ -909,11 +909,7 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
         if tmf_val > 0:
             tmf_shares = tmf_info.get("shares", 0)
             tmf_price  = tmf_info.get("curr", 0)
-            st.warning(
-                f"🔄 **TMF 待轉換 → SOXL**\n\n"
-                f"目前持有 {tmf_shares:,.0f} 股 × ${tmf_price:.2f} = **${tmf_val:,.0f} USD**\n\n"
-                "建議在 SOXX 出現買入訊號時分批換倉。"
-            )
+            
 
     st.divider()
     st.link_button("🛒 新增美股交易紀錄 (Google Sheets)", CONFIG.SHEET_US, use_container_width=True)
