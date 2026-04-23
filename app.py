@@ -849,15 +849,21 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
     col_pie, col_info = st.columns([2, 1])
     with col_pie:
         st.write("📈 **美金資產配置比例 (USD)**")
+        cd_total = sum(p["amount_usd"] for p in (cash_parking or []))
         labels = list(us_live.keys()) + ["美股可用現金"]
         values = [v["curr"] * v["shares"] for v in us_live.values()] + [us_cash_usd]
+        if cd_total > 0:
+            labels += ["CD 停泊"]
+            values += [cd_total]
         fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4,
                                      texttemplate="%{label}<br>$%{value:,.0f}<br>%{percent}")])
         fig.update_layout(height=350, margin=dict(l=0, r=0, t=0, b=0))
         st.plotly_chart(fig, use_container_width=True)
     with col_info:
         fc_us = port["fc_us_usd"]
-        st.info(f"💡 **美股獨立淨資產 (FC_US)**\n\nUS$ {fc_us:,.0f}\n\n*美股市值 + 美股現金*")
+        cd_total_disp = sum(p["amount_usd"] for p in (cash_parking or []))
+        cd_line = f" + CD ${cd_total_disp:,.0f}" if cd_total_disp > 0 else ""
+        st.info(f"💡 **美股獨立淨資產 (FC_US)**\n\nUS$ {fc_us:,.0f}\n\n*美股市值 + 美股現金{cd_line}*")
 
     # 個股明細
     st.subheader("📦 個股明細")
