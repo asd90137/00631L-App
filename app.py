@@ -33,7 +33,6 @@ st.divider()
 # ① 全域常數（CONFIG）
 # ──────────────────────────────────────────
 class CONFIG:
-    TITLE          = "⚔️ 賴賴戰情室 V11.0"
     TICKER_TW      = "00631L"
     TICKER_TW_YF   = "00631L.TW"
     SPLIT_CUTOFF   = pd.to_datetime("2026-03-23")
@@ -1030,7 +1029,16 @@ def render_sidebar() -> dict:
 # ──────────────────────────────────────────
 
 def main():
-    st.title(CONFIG.TITLE)
+    # 這裡取代原本的 st.title(CONFIG.TITLE)
+    st.markdown("""
+        <div style='text-align: center; margin-top: -30px; margin-bottom: 20px;'>
+            <h1 style='font-size: 50px; margin-bottom: 0px;'>時間複利戰情室</h1>
+            <p style='color: #888888; font-size: 20px; letter-spacing: 5px; font-weight: 300;'>
+                ─────── 長線決策大腦 ╳ 絕對紀律執行 ───────
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+    st.divider()
 
     if "analyzed" not in st.session_state:
         st.session_state.analyzed = False
