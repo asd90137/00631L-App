@@ -1021,10 +1021,25 @@ def render_sidebar() -> dict:
 def main():
     # 這裡取代原本的 st.title(CONFIG.TITLE)
     st.markdown("""
-        <div style='text-align: center; margin-top: -30px; margin-bottom: 20px;'>
-            <h1 style='font-size: 50px; margin-bottom: 0px;'>時間複利戰情室</h1>
-            <p style='color: #888888; font-size: 20px; letter-spacing: 5px; font-weight: 300;'>
-                ─────── 長線決策大腦 ╳ 絕對紀律執行 ───────
+        <style>
+            /* 預設（電腦版）的樣式：加上 !important 強制覆蓋 Streamlit 預設設定 */
+            .war-room-title { text-align: center; margin-top: -30px; margin-bottom: 20px; }
+            .main-title { font-size: 100px !important; margin-bottom: 0px !important; font-weight: bold !important; line-height: 1.2 !important; } 
+            .sub-title { color: #888888 !important; font-size: 37px !important; letter-spacing: 5px !important; font-weight: 300 !important; margin-top: 10px !important; }
+            .dash { display: inline !important; }
+
+            /* 當螢幕寬度小於 768px（手機版）時觸發以下樣式 */
+            @media (max-width: 768px) {
+                .main-title { font-size: 44px !important; } 
+                .sub-title { font-size: 17px !important; letter-spacing: 2px !important; } 
+                .dash { display: none !important; }
+            }
+        </style>
+
+        <div class="war-room-title">
+            <h1 class="main-title">時間複利戰情室</h1>
+            <p class="sub-title">
+                <span class="dash">─────── </span>長線決策大腦 ╳ 絕對紀律執行<span class="dash"> ───────</span>
             </p>
         </div>
     """, unsafe_allow_html=True)
