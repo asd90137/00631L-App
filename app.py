@@ -230,7 +230,28 @@ def fetch_us_price(ticker: str, alpaca_key: str = "", alpaca_secret: str = "") -
     now_et = dt_mod.datetime.now(et_tz)
     session = _get_us_session_label(now_et)
 
-    # ── Alpaca ──
+    # ── 1. yfinance 盤前盤後精準抓取 (升級為主引擎) ──
+    try:
+        tkr = yf.Ticker(ticker)
+        # 強制開啟 prepost=True，抓取包含盤前盤後的最近 2 天 1 分鐘 K 線
+        hist = tkr.history(period="2d", interval="1m", prepost=True)
+        
+        if not hist.empty:
+            curr = float(hist["Close"].iloc[-1])
+            # 昨收使用 fast_info 取得會比較精準穩定
+            prev = float(tkr.fast_info.previous_close)
+            
+            # 取得這筆報價的精準時間
+            last_time = hist.index[-1].astimezone(et_tz)
+            time_str = last_time.strftime("%Y-%m-%d %H:%M ET")
+            
+            return dict(curr=curr, prev=prev, session=session,
+                        source="🟢 yfinance (含盤外)", time_str=time_str)
+    except Exception as e:
+        # 如果 yfinance 被擋或出錯，靜默往下走備援
+        pass
+
+    # ── 2. Alpaca (降級為備援，因為免費版 IEX 盤外報價極少) ──
     if alpaca_key and alpaca_secret:
         try:
             from alpaca.data.historical import StockHistoricalDataClient
@@ -248,41 +269,15 @@ def fetch_us_price(ticker: str, alpaca_key: str = "", alpaca_secret: str = "") -
                 curr = trade_price
                 time_str = trade_time.astimezone(et_tz).strftime("%Y-%m-%d %H:%M ET") if trade_time else "N/A"
                 return dict(curr=curr, prev=prev_price, session=session,
-                            source=f"🟢 Alpaca", time_str=time_str)
+                            source=f"🟡 Alpaca (備援)", time_str=time_str)
         except ImportError:
-            st.sidebar.warning("⚠️ 未安裝 alpaca-py")
-        except Exception as e:
-            st.sidebar.warning(f"⚠️ Alpaca 失敗：{e}，改用 yfinance")
-
-    # ── yfinance fast_info ──
-    try:
-        import datetime as dt_mod
-        fi = yf.Ticker(ticker).fast_info
-        try:
-            ts = fi.regular_market_time
-            et_tz = pytz.timezone("America/New_York")
-            dt = (dt_mod.datetime.fromtimestamp(ts, tz=et_tz) if isinstance(ts, (int, float))
-                  else ts.astimezone(et_tz))
-            yf_time_str = dt.strftime("%Y-%m-%d %H:%M ET")
+            pass
         except Exception:
-            yf_time_str = "最後收盤價"
-        return dict(curr=float(fi.last_price), prev=float(fi.previous_close),
-                    session=session, source="🟡 yfinance", time_str=yf_time_str)
-    except Exception:
-        pass
+            pass
 
-    # ── yfinance history fallback ──
-    try:
-        hist = yf.download(ticker, period="5d", progress=False)
-        closes = (hist["Close"][ticker] if isinstance(hist.columns, pd.MultiIndex)
-                  else hist["Close"]).dropna()
-        curr = float(closes.iloc[-1])
-        prev = float(closes.iloc[-2] if len(closes) >= 2 else closes.iloc[-1])
-        return dict(curr=curr, prev=prev, session=session,
-                    source="🔴 yfinance 歷史備援", time_str="歷史資料")
-    except Exception:
-        return dict(curr=0.0, prev=0.0, session="❓",
-                    source="❌ 完全失敗", time_str="N/A")
+    # ── 3. 完全失敗的最後防線 ──
+    return dict(curr=0.0, prev=0.0, session="❓",
+                source="❌ 完全失敗", time_str="N/A")
 
 
 def read_gsheets(conn, url: str, **kwargs) -> pd.DataFrame:
