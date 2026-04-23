@@ -285,8 +285,8 @@ if st.session_state.analyzed:
     # ==========================================
     raw_curr, raw_yest, price_source, price_time, price_age = get_tw_price(TICKER_TW)
 
-    p_tw_curr = round(raw_curr / (22.0 if raw_curr > 1000 else 1.0), 2)
-    p_tw_yest = round(raw_yest / (22.0 if raw_yest > 1000 else 1.0), 2)
+    p_tw_curr = round(raw_curr / (22.0 if raw_curr > 100 else 1.0), 2)
+    p_tw_yest = round(raw_yest / (22.0 if raw_yest > 100 else 1.0), 2)
 
     if price_age < 60:
         st.caption(f"{price_source} 正常｜{price_time}（{price_age:.0f} 分鐘前）")
@@ -523,8 +523,8 @@ if st.session_state.analyzed:
                 buy_tw['成交日期'] = pd.to_datetime(buy_tw['成交日期'])
                 recs_tw = []
                 for _, r in buy_tw.sort_values('成交日期', ascending=False).iterrows():
-                    adj_p = r['成交價格'] / 22 if r['成交日期'] < split_cutoff and r['成交價格'] > 1000 else r['成交價格']
-                    adj_s = r['庫存股數'] * 22 if r['成交日期'] < split_cutoff and r['成交價格'] > 1000 else r['庫存股數']
+                    adj_p = r['成交價格'] / 22 if r['成交日期'] < split_cutoff and r['成交價格'] > 100 else r['成交價格']
+                    adj_s = r['庫存股數'] * 22 if r['成交日期'] < split_cutoff and r['成交價格'] > 100 else r['庫存股數']
                     l_pnl = adj_s * p_tw_curr - r['持有成本']
                     l_roi = l_pnl / r['持有成本'] if r['持有成本'] > 0 else 0
                     l_ann = ((1 + l_roi) ** (365 / max((datetime.today() - r['成交日期']).days, 1)) - 1) * 100
