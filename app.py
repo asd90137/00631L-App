@@ -443,10 +443,11 @@ def parse_cash_parking(df_raw: pd.DataFrame) -> list[dict]:
     if df_raw.empty:
         return result
 
-    col_type = next((c for c in df_raw.columns if "停泊" in str(c) or "類型" in str(c) and "停" in str(c)), None)
-    col_amt  = next((c for c in df_raw.columns if "停泊" in str(c) and "金額" in str(c) or ("金額" in str(c) and "USD" in str(c))), None)
-    col_mat  = next((c for c in df_raw.columns if "到期" in str(c)), None)
-    col_note = next((c for c in df_raw.columns if "備註" in str(c) and col_type and c != col_type), None)
+    col_type = next((c for c in df_raw.columns if "停泊類型" in str(c)), None)
+    col_amt  = next((c for c in df_raw.columns if str(c).strip() == "金額"), None)
+    col_mat  = next((c for c in df_raw.columns if "到期日" in str(c)), None)
+    col_date = next((c for c in df_raw.columns if str(c).strip() == "日期"), None)
+    col_note = None  # 目前帳本無備註欄
 
     if col_type is None or col_amt is None:
         return result
@@ -467,10 +468,15 @@ def parse_cash_parking(df_raw: pd.DataFrame) -> list[dict]:
             days_left = (mat_date - today).days
         except Exception:
             pass
-        note = str(row.get(col_note, "")).strip() if col_note else ""
+        buy_date_raw = row.get(col_date, "") if col_date else ""
+        try:
+            buy_date = pd.to_datetime(buy_date_raw).strftime("%Y-%m-%d")
+        except Exception:
+            buy_date = str(buy_date_raw).strip()
         result.append(dict(
             type=t, amount_usd=amt,
-            maturity=mat_date, days_left=days_left, note=note
+            maturity=mat_date, days_left=days_left,
+            buy_date=buy_date,
         ))
     return result
 
@@ -905,10 +911,10 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
                     days_str, urgency = f"{days} 天後到期", "🟡"
                 park_rows.append({
                     "類型": p["type"],
+                    "買入日期": p.get("buy_date", ""),
                     "金額 (USD)": f"${p['amount_usd']:,.0f}",
                     "到期日": str(p["maturity"]) if p["maturity"] else "N/A",
                     "狀態": f"{urgency} {days_str}",
-                    "備註": p["note"],
                 })
             st.dataframe(pd.DataFrame(park_rows), use_container_width=True, hide_index=True)
         if tmf_val > 0:
