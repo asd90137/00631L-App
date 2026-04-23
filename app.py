@@ -26,7 +26,7 @@ st.set_page_config(page_title="賴賴終極戰情室", page_icon="💰", layout=
 # ① 全域常數（CONFIG）
 # ──────────────────────────────────────────
 class CONFIG:
-    TITLE          = "🛡️ 賴賴投資戰情室 V11.0"
+    TITLE          = "⚔️ 賴賴戰情室 V11.0"
     TICKER_TW      = "00631L"
     TICKER_TW_YF   = "00631L.TW"
     SPLIT_CUTOFF   = pd.to_datetime("2026-03-23")
