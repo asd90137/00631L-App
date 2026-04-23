@@ -122,7 +122,7 @@ def get_tw_session_label() -> str:
     if pre_open <= t < open_t:
         return "🌅 盤前"
     if open_t <= t < close_t:
-        return "☀️ 盤中"
+        return "🟢 盤中"
     if close_t <= t < after_t:
         return "🌆 盤後定價"
     return "🌙 休市"
@@ -149,7 +149,7 @@ def fetch_tw_price(ticker: str, fugle_key: str = "") -> dict:
             prev = q.get("referencePrice", curr)
             raw_t = q.get("lastUpdated") or q.get("lastTrade", {}).get("time")
             time_str, age_min = _parse_fugle_time(raw_t)
-            return dict(curr=float(curr), prev=float(prev), source="🟢 Fugle",
+            return dict(curr=float(curr), prev=float(prev), source="🟢 Fugle 即時",
                         time_str=time_str, age_min=age_min, session=get_tw_session_label())
         except ImportError:
             pass
@@ -217,7 +217,7 @@ def _get_us_session_label(now_et) -> str:
     if pre[0] <= t < pre[1]:
         return "🌅 盤前"
     if reg[0] <= t < reg[1]:
-        return "☀️ 盤中"
+        return "🟢 盤中"
     if post[0] <= t < post[1]:
         return "🌆 盤後"
     return "🌙 休市"
@@ -225,6 +225,11 @@ def _get_us_session_label(now_et) -> str:
 
 @st.cache_data(ttl=CONFIG.PRICE_TTL)
 def fetch_us_price(ticker: str, alpaca_key: str = "", alpaca_secret: str = "") -> dict:
+    """
+    回傳 dict: curr, prev, session, source, time_str
+    優先 Alpaca（含盤前盤後）→ yfinance fast_info → yfinance 歷史備援
+    注意：alpaca_key/secret 從外部傳入，避免在 cache 函式內讀 st.secrets（會不穩定）
+    """
     import pytz, datetime as dt_mod
     et_tz = pytz.timezone("America/New_York")
     now_et = dt_mod.datetime.now(et_tz)
@@ -234,40 +239,46 @@ def fetch_us_price(ticker: str, alpaca_key: str = "", alpaca_secret: str = "") -
     if alpaca_key and alpaca_secret:
         try:
             from alpaca.data.historical import StockHistoricalDataClient
-            from alpaca.data.requests import StockSnapshotRequest
+            from alpaca.data.requests import StockSnapshotRequest, StockLatestQuoteRequest
             from alpaca.data.enums import DataFeed
 
             client = StockHistoricalDataClient(alpaca_key, alpaca_secret)
+
+            # Snapshot → 正式收盤價 + 前日收盤
             snap_req = StockSnapshotRequest(symbol_or_symbols=ticker, feed=DataFeed.IEX)
             snap = client.get_stock_snapshot(snap_req)
             s = snap.get(ticker)
             if s:
-                prev_price  = float(s.previous_daily_bar.close) if s.previous_daily_bar else 0.0
-                trade_price = float(s.latest_trade.price) if s.latest_trade else 0.0
-                trade_time  = s.latest_trade.timestamp if s.latest_trade else None
-                curr = trade_price
+                reg_price  = float(s.daily_bar.close)       if s.daily_bar else 0.0
+                prev_price = float(s.previous_daily_bar.close) if s.previous_daily_bar else reg_price
+                trade_price = float(s.latest_trade.price)   if s.latest_trade else reg_price
+                trade_time  = s.latest_trade.timestamp      if s.latest_trade else None
+
+                # 盤前盤後：取 latest_quote 的 mid price 作為延伸時段參考
+                ext_price = 0.0
+                if session in ("🌅 盤前", "🌆 盤後"):
+                    try:
+                        q_req = StockLatestQuoteRequest(symbol_or_symbols=ticker, feed=DataFeed.IEX)
+                        q = client.get_stock_latest_quote(q_req).get(ticker)
+                        if q and q.ask_price and q.bid_price:
+                            ext_price = (q.ask_price + q.bid_price) / 2
+                    except Exception:
+                        pass
+
+                curr = ext_price if ext_price > 0 else trade_price
                 time_str = trade_time.astimezone(et_tz).strftime("%Y-%m-%d %H:%M ET") if trade_time else "N/A"
-                return dict(curr=curr, prev=prev_price, session=session,
-                            source=f"🟢 Alpaca", time_str=time_str)
+                src = f"🟢 Alpaca {session}"
+                return dict(curr=curr, prev=prev_price, session=session, source=src, time_str=time_str)
         except ImportError:
-            st.sidebar.warning("⚠️ 未安裝 alpaca-py")
+            pass
         except Exception as e:
             st.sidebar.warning(f"⚠️ Alpaca 失敗：{e}，改用 yfinance")
 
     # ── yfinance fast_info ──
     try:
-        import datetime as dt_mod
         fi = yf.Ticker(ticker).fast_info
-        try:
-            ts = fi.regular_market_time
-            et_tz = pytz.timezone("America/New_York")
-            dt = (dt_mod.datetime.fromtimestamp(ts, tz=et_tz) if isinstance(ts, (int, float))
-                  else ts.astimezone(et_tz))
-            yf_time_str = dt.strftime("%Y-%m-%d %H:%M ET")
-        except Exception:
-            yf_time_str = "最後收盤價"
         return dict(curr=float(fi.last_price), prev=float(fi.previous_close),
-                    session=session, source="🟡 yfinance", time_str=yf_time_str)
+                    session=session, source="🟡 yfinance", time_str="N/A")
     except Exception:
         pass
 
@@ -278,12 +289,9 @@ def fetch_us_price(ticker: str, alpaca_key: str = "", alpaca_secret: str = "") -
                   else hist["Close"]).dropna()
         curr = float(closes.iloc[-1])
         prev = float(closes.iloc[-2] if len(closes) >= 2 else closes.iloc[-1])
-        return dict(curr=curr, prev=prev, session=session,
-                    source="🔴 yfinance 歷史備援", time_str="歷史資料")
+        return dict(curr=curr, prev=prev, session=session, source="🔴 yfinance 歷史備援", time_str="歷史資料")
     except Exception:
-        return dict(curr=0.0, prev=0.0, session="❓",
-                    source="❌ 完全失敗", time_str="N/A")
-
+        return dict(curr=0.0, prev=0.0, session="❓", source="❌ 完全失敗", time_str="N/A")
 
 
 def read_gsheets(conn, url: str, **kwargs) -> pd.DataFrame:
@@ -436,7 +444,7 @@ def parse_cash_parking(df_raw: pd.DataFrame) -> list[dict]:
         return result
 
     col_type = next((c for c in df_raw.columns if "停泊" in str(c) or "類型" in str(c) and "停" in str(c)), None)
-    col_amt  = next((c for c in df_raw.columns if "停泊" in str(c) and "金額" in str(c) or ("金額" in str(c))), None)
+    col_amt  = next((c for c in df_raw.columns if "停泊" in str(c) and "金額" in str(c) or ("金額" in str(c) and "USD" in str(c))), None)
     col_mat  = next((c for c in df_raw.columns if "到期" in str(c)), None)
     col_note = next((c for c in df_raw.columns if "備註" in str(c) and col_type and c != col_type), None)
 
@@ -470,8 +478,7 @@ def parse_cash_parking(df_raw: pd.DataFrame) -> list[dict]:
 def compute_portfolio(tw_trade: dict, us_live: dict,
                       p_tw_curr: float, p_tw_yest: float,
                       cash_twd: float, loan_twd: float,
-                      us_cash_usd: float, usd_twd: float,
-                      cash_parking: list = None) -> dict:
+                      us_cash_usd: float, usd_twd: float) -> dict:
     """
     彙整雙帳戶資產、曝險度。
     所有台幣金額後綴 _twd，美元後綴 _usd。
@@ -479,7 +486,7 @@ def compute_portfolio(tw_trade: dict, us_live: dict,
     # --- 台股 ---
     val_tw_twd  = tw_trade["shares"] * p_tw_curr
     cost_tw_twd = tw_trade["cost"]
-    exp_tw_twd  = val_tw_twd * 2
+    exp_tw_twd  = val_tw_twd * 2                           # 00631L 2x 槓桿
     fc_tw_twd   = val_tw_twd + cash_twd - loan_twd
     pct_tw      = (exp_tw_twd / fc_tw_twd * 100) if fc_tw_twd > 0 else 0
     daily_pnl_twd = (p_tw_curr - p_tw_yest) * tw_trade["shares"]
@@ -492,8 +499,7 @@ def compute_portfolio(tw_trade: dict, us_live: dict,
         v["shares"] * v["curr"] * CONFIG.LEVERAGE_MAP.get(t, 1)
         for t, v in us_live.items()
     )
-    cd_total_usd = sum(p["amount_usd"] for p in (cash_parking or []))
-    fc_us_usd   = val_us_usd + us_cash_usd + cd_total_usd
+    fc_us_usd   = val_us_usd + us_cash_usd
     pct_us      = (exp_us_usd / fc_us_usd * 100) if fc_us_usd > 0 else 0
     daily_pnl_usd = sum((v["curr"] - v["yest"]) * v["shares"] for v in us_live.values())
     us_roi      = (val_us_usd / cost_us_usd - 1) if cost_us_usd > 0 else 0
@@ -514,6 +520,7 @@ def compute_portfolio(tw_trade: dict, us_live: dict,
 
         fc_total_twd=fc_total_twd, exp_total_twd=exp_total_twd, pct_total=pct_total,
     )
+
 
 # ──────────────────────────────────────────
 # ⑤ UI 元件層
@@ -692,7 +699,7 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
 def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
     """台股三張戰術圖表"""
     try:
-        hist = yf.download(CONFIG.TICKER_TW_YF, period="5y", progress=False)
+        hist = yf.download(CONFIG.TICKER_TW_YF, period="max", progress=False)
         raw_close = (hist["Close"][CONFIG.TICKER_TW_YF]
                      if isinstance(hist.columns, pd.MultiIndex) else hist["Close"])
 
@@ -786,48 +793,9 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
     # 報價來源與時段
     source_info = soxl.get("source", "")
     time_info   = soxl.get("time_str", "")
-    st.caption(f"{source_info} {us_session} {time_info}")
+    st.caption(f"{source_info} | {us_session} | 最後更新：{time_info}")
 
     st.subheader("🎯 SOXL 網格進出戰略")
-    # ── 資金停泊區 UI ──
-    parking  = cash_parking or []
-    tmf_info = us_live.get("TMF", {})
-    tmf_val  = tmf_info.get("curr", 0) * tmf_info.get("shares", 0)
-    total_parked = sum(p["amount_usd"] for p in parking) + tmf_val
-
-    with st.expander("🅿️ 資金停泊區（CD / T-Bill / 待轉換）", expanded=True):
-        if not parking and tmf_val == 0:
-            st.info("目前無 CD / T-Bill 停泊紀錄。閒置資金建議停泊於 **1～3 個月期美國國債**，等待大跌機會。")
-        else:
-            st.caption(f"總閒置資金合計：**${total_parked:,.0f} USD**（含 TMF 市值）")
-            if parking:
-                park_rows = []
-                for p in sorted(parking, key=lambda x: x["maturity"] or datetime.max.date()):
-                    days = p["days_left"]
-                    if days is None:
-                        days_str, urgency = "N/A", ""
-                    elif days <= 0:
-                        days_str, urgency = "✅ 已到期", "🔴"
-                    elif days <= 7:
-                        days_str, urgency = f"⚠️ {days} 天後到期", "🟠"
-                    else:
-                        days_str, urgency = f"{days} 天後到期", "🟡"
-                    park_rows.append({
-                        "類型": p["type"],
-                        "金額 (USD)": f"${p['amount_usd']:,.0f}",
-                        "到期日": str(p["maturity"]) if p["maturity"] else "N/A",
-                        "狀態": f"{urgency} {days_str}",
-                        "備註": p["note"],
-                    })
-                st.dataframe(pd.DataFrame(park_rows), use_container_width=True, hide_index=True)
-            if tmf_val > 0:
-                tmf_shares = tmf_info.get("shares", 0)
-                tmf_price  = tmf_info.get("curr", 0)
-                st.warning(
-                    f"🔄 **TMF 待轉換 → SOXL**\n\n"
-                    f"目前持有 {tmf_shares:,.0f} 股 × ${tmf_price:.2f} = **${tmf_val:,.0f} USD**\n\n"
-                    "建議在 SOXX 出現買入訊號時分批換倉。"
-                )
 
     # 網格指標
     g = grid
@@ -875,17 +843,15 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
     col_pie, col_info = st.columns([2, 1])
     with col_pie:
         st.write("📈 **美金資產配置比例 (USD)**")
-        # 加入 CD 停泊資金
-        cd_total = sum(p["amount_usd"] for p in (cash_parking or []))
-        labels = list(us_live.keys()) + ["美股可用現金", "CD停泊"]
-        values = [v["curr"] * v["shares"] for v in us_live.values()] + [us_cash_usd, cd_total]
+        labels = list(us_live.keys()) + ["美股可用現金"]
+        values = [v["curr"] * v["shares"] for v in us_live.values()] + [us_cash_usd]
         fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4,
                                      texttemplate="%{label}<br>$%{value:,.0f}<br>%{percent}")])
         fig.update_layout(height=350, margin=dict(l=0, r=0, t=0, b=0))
         st.plotly_chart(fig, use_container_width=True)
     with col_info:
         fc_us = port["fc_us_usd"]
-        st.info(f"💡 **美股獨立淨資產 (FC_US)**\n\nUS$ {fc_us:,.0f}\n\n*美股市值 + 美股現金 + CD停泊*")
+        st.info(f"💡 **美股獨立淨資產 (FC_US)**\n\nUS$ {fc_us:,.0f}\n\n*美股市值 + 美股現金*")
 
     # 個股明細
     st.subheader("📦 個股明細")
@@ -912,6 +878,47 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
             "年化報酬": f"{l_ann:+.2f}%",
         })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    # ── 資金停泊區（個股明細下方，直接展開）──
+    st.divider()
+    st.subheader("🅿️ 資金停泊區")
+    parking  = cash_parking or []
+    tmf_info = us_live.get("TMF", {})
+    tmf_val  = tmf_info.get("curr", 0) * tmf_info.get("shares", 0)
+    total_parked = sum(p["amount_usd"] for p in parking) + tmf_val
+
+    if not parking and tmf_val == 0:
+        st.info("目前無 CD / T-Bill 停泊紀錄。閒置資金建議停泊於 **1～3 個月期美國國債**，等待大跌機會。")
+    else:
+        st.caption(f"總閒置資金合計：**${total_parked:,.0f} USD**（含 TMF 市值）")
+        if parking:
+            park_rows = []
+            for p in sorted(parking, key=lambda x: x["maturity"] or datetime.max.date()):
+                days = p["days_left"]
+                if days is None:
+                    days_str, urgency = "N/A", ""
+                elif days <= 0:
+                    days_str, urgency = "✅ 已到期", "🔴"
+                elif days <= 7:
+                    days_str, urgency = f"⚠️ {days} 天後到期", "🟠"
+                else:
+                    days_str, urgency = f"{days} 天後到期", "🟡"
+                park_rows.append({
+                    "類型": p["type"],
+                    "金額 (USD)": f"${p['amount_usd']:,.0f}",
+                    "到期日": str(p["maturity"]) if p["maturity"] else "N/A",
+                    "狀態": f"{urgency} {days_str}",
+                    "備註": p["note"],
+                })
+            st.dataframe(pd.DataFrame(park_rows), use_container_width=True, hide_index=True)
+        if tmf_val > 0:
+            tmf_shares = tmf_info.get("shares", 0)
+            tmf_price  = tmf_info.get("curr", 0)
+            st.warning(
+                f"🔄 **TMF 待轉換 → SOXL**\n\n"
+                f"目前持有 {tmf_shares:,.0f} 股 × ${tmf_price:.2f} = **${tmf_val:,.0f} USD**\n\n"
+                "建議在 SOXX 出現買入訊號時分批換倉。"
+            )
 
     st.divider()
     st.link_button("🛒 新增美股交易紀錄 (Google Sheets)", CONFIG.SHEET_US, use_container_width=True)
@@ -947,7 +954,7 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years: int, target_k: flo
 | 戰區 | 曝險金額 (台幣) | 淨資產 (FC) | 獨立曝險度 |
 | :--- | :--- | :--- | :--- |
 | 💰 台股 | NT$ {exp_tw/10000:,.0f} 萬 | NT$ {fc_tw/10000:,.0f} 萬 | **{pct_tw:.1f}%** |
-| 💵 美股 | NT\$ {exp_us/10000:,.0f} 萬<br/><span style="font-size: 0.85em; color: gray;"> {port['exp_us_usd']:,.0f} | NT\$ {fc_us/10000:,.0f} 萬<br/><span style="font-size: 0.85em; color: gray;">  {port['fc_us_usd']:,.0f} | **{pct_us:.1f}%** |
+| 💵 美股 | NT$ {exp_us/10000:,.0f} 萬 (US$ {port['exp_us_usd']:,.0f}) | NT$ {fc_us/10000:,.0f} 萬 (US$ {port['fc_us_usd']:,.0f}) | **{pct_us:.1f}%** |
 | 🔥 綜合 | **NT$ {exp_tot/10000:,.0f} 萬** | **NT$ {fc_total/10000:,.0f} 萬** | **{pct_tot:.1f}%** |
 """, unsafe_allow_html=True)
 
@@ -1146,10 +1153,6 @@ def main():
     # 解析美股交易 + 即時報價（Alpaca 含盤前盤後）
     us_live = {}
     us_session = ""
-    import pytz, datetime as dt_mod
-    et_tz = pytz.timezone("America/New_York")
-    us_session = _get_us_session_label(dt_mod.datetime.now(et_tz))
-
     for t in CONFIG.US_TICKERS:
         trade = parse_us_trades(df_us_raw, t)
         price = fetch_us_price(t, alpaca_key=alpaca_key, alpaca_secret=alpaca_secret)
@@ -1173,11 +1176,10 @@ def main():
     # 計算資產組合
     loan_total = params["loan1"] + params["loan2"]
     port = compute_portfolio(
-    tw_trade, us_live,
-    p_tw_curr, p_tw_yest,
-    cash_twd, loan_total,
-    us_cash_usd, params["usd_twd"],
-    cash_parking=cash_parking,
+        tw_trade, us_live,
+        p_tw_curr, p_tw_yest,
+        cash_twd, loan_total,
+        us_cash_usd, params["usd_twd"],
     )
 
     # ── 渲染三個 Tab ──
