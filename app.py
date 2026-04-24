@@ -242,7 +242,7 @@ def fetch_us_price(ticker: str) -> dict:
             time_str = last_time.strftime("%Y-%m-%d %H:%M ET")
             
             return dict(curr=curr, prev=prev, session=session,
-                        source="🟢 yfinance (含盤外)", time_str=time_str)
+                        source="🟢 yfinance ", time_str=time_str)
     except Exception as e:
         pass
 
