@@ -994,12 +994,12 @@ def render_tab_nanya(price_info: dict):
     net_profit = unrealized + HEDGE_LOSS   # 實質淨利 = 未實現 + 已實現虧損
     daily_pnl  = (p_curr - p_yest) * TOTAL_SHARES
     daily_pct  = (p_curr / p_yest - 1) * 100 if p_yest > 0 else 0
-    
-    st.subheader("🏭 南亞科 (2408) 員工股鎖利與避險戰情")
     render_price_freshness(price_info.get("source", ""), price_info.get("time_str", ""), 
                            price_info.get("age_min", 0), price_info.get("session", ""))
+
+    st.subheader("🏭 南亞科 (2408) 員工股鎖利與避險戰情")
     
-    st.divider()
+    
     
     # ── 頂部指標 ──
     # 新增今日報酬，將欄位改為 6 欄顯示
@@ -1126,7 +1126,7 @@ def main():
 
             /* 當螢幕寬度小於 768px（手機版）時觸發以下樣式 */
             @media (max-width: 768px) {
-                .main-title { font-size: 44px !important; } 
+                .main-title { font-size: 42px !important; } 
                 .sub-title { font-size: 17px !important; letter-spacing: 2px !important; } 
                 .dash { display: none !important; }
             }
@@ -1264,7 +1264,7 @@ def main():
     )
 
     # ── 渲染四個 Tab ──
-    tab1, tab2, tab3, tab4 = st.tabs(["💰 台股", "💵 美股", "🛬 生命周期 & 退休", "🏭 南亞科 (2408)"])
+    tab1, tab2, tab3, tab4 = st.tabs(["💰 台股", "💵 美股", "🛬 生命周期 & 退休", "🏭 南亞科 "])
 
     with tab1:
         render_tab_tw(tw_trade, port, p_tw_curr, p_tw_yest,
