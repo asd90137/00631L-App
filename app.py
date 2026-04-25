@@ -488,13 +488,13 @@ def render_price_freshness(source: str, time_str: str, age_min: float, session: 
     """顯示報價新鮮度 + 交易時段 caption"""
     session_tag = f" {session}" if session else ""
     if age_min < 60:
-        st.caption(f"{source}{session_tag} ｜ {time_str}（{age_min:.0f} 分鐘前）")
+        st.caption(f"{source}{session_tag} {time_str}（{age_min:.0f} 分鐘前）")
     elif age_min < 480:
-        st.caption(f"{source}{session_tag} ｜ {time_str}（{age_min/60:.1f} 小時前）")
+        st.caption(f"{source}{session_tag} {time_str}（{age_min/60:.1f} 小時前）")
     elif age_min < 9999:
-        st.caption(f"{source}{session_tag} 可能異常 ｜ {time_str}（{age_min/60:.1f} 小時前）")
+        st.caption(f"{source}{session_tag} {time_str}（{age_min/60:.1f} 小時前）")
     else:
-        st.caption(f"{source}{session_tag} ｜ 使用歷史收盤價（{time_str}）")
+        st.caption(f"{source}{session_tag} 使用歷史收盤價（{time_str}）")
 
 
 def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float,
