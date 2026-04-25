@@ -735,6 +735,76 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
                 fig3.update_yaxes(range=[min(pi*1.2, -15), max(px*1.2, 20)])
                 st.plotly_chart(fig3, use_container_width=True)
 
+# D. 成本 vs 市值（金額軌跡）
+        st.write("💴 **D. 庫存成本 vs 市值 金額軌跡**")
+        if not buy_df.empty:
+            # ds, dc 已在上方 C 圖計算完畢，直接沿用
+            market_val = ds * rp          # 每日市值（元）
+            cum_cost   = dc               # 每日累積成本（元）
+            pnl_abs    = market_val - cum_cost  # 每日絕對損益（元）
+
+            mv_s  = market_val.dropna()
+            cc_s  = cum_cost.reindex(mv_s.index).fillna(method="ffill")
+            pnl_s = pnl_abs.reindex(mv_s.index).fillna(0)
+
+            fig4 = go.Figure()
+
+            # 成本線（灰色虛線）
+            fig4.add_trace(go.Scatter(
+                x=cc_s.index, y=cc_s.values,
+                name="累積成本",
+                line=dict(color="#888888", dash="dash", width=2),
+            ))
+
+            # 市值線（主線）
+            fig4.add_trace(go.Scatter(
+                x=mv_s.index, y=mv_s.values,
+                name="市值",
+                line=dict(color="#2EC4B6", width=2.5),
+            ))
+
+            # 損益填色區（市值 vs 成本）
+            fig4.add_trace(go.Scatter(
+                x=list(mv_s.index) + list(cc_s.index[::-1]),
+                y=list(mv_s.values) + list(cc_s.values[::-1]),
+                fill="toself",
+                fillcolor="rgba(46,196,182,0.15)",
+                line=dict(color="rgba(255,255,255,0)"),
+                showlegend=False,
+                name="損益區間",
+            ))
+
+            # 標注最新市值與成本
+            last_mv  = mv_s.iloc[-1]
+            last_cc  = cc_s.iloc[-1]
+            last_pnl = last_mv - last_cc
+            last_date = mv_s.index[-1]
+
+            fig4.add_annotation(
+                x=last_date, y=last_mv,
+                text=f"市值: NT$ {last_mv/10000:,.1f} 萬",
+                showarrow=True, ay=-30, font=dict(color="#2EC4B6")
+            )
+            fig4.add_annotation(
+                x=last_date, y=last_cc,
+                text=f"成本: NT$ {last_cc/10000:,.1f} 萬",
+                showarrow=True, ay=30, font=dict(color="#888888")
+            )
+
+            pnl_color = "#2EC4B6" if last_pnl >= 0 else "#E71D36"
+            sign = "+" if last_pnl >= 0 else ""
+            fig4.update_layout(
+                height=400,
+                margin=dict(l=10, r=10, t=30, b=10),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                yaxis=dict(title="金額 (NT$)", tickformat=",.0f"),
+                title=dict(
+                    text=f"目前損益：{sign}NT$ {last_pnl/10000:,.1f} 萬",
+                    font=dict(color=pnl_color, size=14),
+                    x=0.01,
+                )
+            )
+            st.plotly_chart(fig4, use_container_width=True)
     except Exception as e:
         st.error(f"圖表載入失敗，請稍後重試。({e})")
 
