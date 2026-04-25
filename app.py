@@ -735,82 +735,28 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
                 fig3.update_yaxes(range=[min(pi*1.2, -15), max(px*1.2, 20)])
                 st.plotly_chart(fig3, use_container_width=True)
 
-        # D. 成本 vs 市值（金額軌跡）
+                # D. 成本 vs 市值（金額軌跡）
         st.write("💴 **D. 庫存成本 vs 市值 金額軌跡**")
         if not buy_df.empty:
-            market_val = ds * rp
-            cum_cost   = dc
+            mv_m = (ds * rp) / 1_000_000
+            cc_m = dc.reindex(rp.index).ffill() / 1_000_000
+            mv_m = mv_m.dropna()
+            cc_m = cc_m.reindex(mv_m.index)
 
-            mv_s = market_val.dropna()
-            cc_s = cum_cost.reindex(mv_s.index).ffill()
-
-            mv_m = mv_s / 1_000_000
-            cc_m = cc_s / 1_000_000
-
-            last_mv   = mv_m.iloc[-1]
-            last_cc   = cc_m.iloc[-1]
-            last_pnl  = last_mv - last_cc
-            last_date = mv_m.index[-1]
-            mv_max_date = mv_m.idxmax()
-            mv_max = mv_m.max()
-
-            fig4 = go.Figure()
-
-            fig4.add_trace(go.Scatter(
-                x=cc_m.index, y=cc_m.values,
-                name="累積成本",
-                line=dict(color="#888888", width=2),
-            ))
-
-            fig4.add_trace(go.Scatter(
-                x=mv_m.index, y=mv_m.values,
-                name="市值",
-                line=dict(color="#2EC4B6", width=2.5),
-            ))
-
-            fig4.add_annotation(
-                x=mv_max_date, y=mv_max,
-                text=f"最高:{mv_max:.2f}M",
-                showarrow=True, ay=-30, ax=0,
-                font=dict(color="#2EC4B6", size=11)
-            )
-            fig4.add_annotation(
-                x=last_date, y=last_mv,
-                text=f"最新:{last_mv:.2f}M",
-                showarrow=True, ay=-30, ax=-50,
-                font=dict(color="#2EC4B6", size=11)
-            )
-            fig4.add_annotation(
-                x=last_date, y=last_cc,
-                text=f"成本:{last_cc:.2f}M",
-                showarrow=True, ay=30, ax=-50,
-                font=dict(color="#888888", size=11)
-            )
-
-            pnl_color = "#2EC4B6" if last_pnl >= 0 else "#E71D36"
+            last_pnl = mv_m.iloc[-1] - cc_m.iloc[-1]
             sign = "+" if last_pnl >= 0 else ""
 
-            fig4.update_layout(
-                height=420,
-                margin=dict(l=10, r=10, t=70, b=10),  # t=70 留給兩行標題
-                legend=dict(
-                    orientation="h",
-                    yanchor="top", y=-0.08,
-                    xanchor="right", x=1
-                ),
-                yaxis=dict(
-                    title="",          # Y軸標題拿掉
-                    tickformat=".1f",
-                    ticksuffix=" M",
-                ),
-                title=dict(
-                    text=f"　<br>目前損益：{sign}NT$ {last_pnl:.2f}M",  # 第一行空白換行
-                    font=dict(color=pnl_color, size=14),
-                    x=0.01,
-                    y=0.97,
-                )
-            )
+            fig4 = go.Figure()
+            fig4.add_trace(go.Scatter(x=cc_m.index, y=cc_m.values, name="累積成本", line=dict(color="#888888", width=2)))
+            fig4.add_trace(go.Scatter(x=mv_m.index, y=mv_m.values, name="市值", line=dict(color="#2EC4B6", width=2.5)))
+            fig4.add_annotation(x=mv_m.idxmax(), y=mv_m.max(), text=f"最高:{mv_m.max():.2f}M", showarrow=True, ay=-30)
+            fig4.add_annotation(x=mv_m.index[-1], y=mv_m.iloc[-1], text=f"最新:{mv_m.iloc[-1]:.2f}M", showarrow=True, ax=40)
+            fig4.add_annotation(x=cc_m.index[-1], y=cc_m.iloc[-1], text=f"成本:{cc_m.iloc[-1]:.2f}M", showarrow=True, ay=30, ax=40)
             st.plotly_chart(fig4, use_container_width=True)
+
+            # 損益單獨一行顯示在圖下方
+            pnl_color = "#2EC4B6" if last_pnl >= 0 else "#E71D36"
+            st.markdown(f"<p style='color:{pnl_color}; font-size:16px; margin:0'>目前損益：{sign}NT$ {last_pnl:.2f}M</p>", unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"圖表載入失敗，請稍後重試。({e})")
