@@ -848,6 +848,7 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
         session_label = info.get("session", "")
         rows.append({
             "代號": t,
+            "時段": session_label,
             "股數": f"{info['shares']:,.0f}",
             "均價": f"${avg:.2f}",
             "成本": f"${info['cost']:,.0f}",
