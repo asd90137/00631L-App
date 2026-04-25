@@ -744,47 +744,49 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
             mv_s = market_val.dropna()
             cc_s = cum_cost.reindex(mv_s.index).ffill()
 
+            # 轉換為百萬單位
+            mv_m  = mv_s  / 1_000_000
+            cc_m  = cc_s  / 1_000_000
+
             fig4 = go.Figure()
 
-            # 成本線
             fig4.add_trace(go.Scatter(
-                x=cc_s.index, y=cc_s.values,
+                x=cc_m.index, y=cc_m.values,
                 name="累積成本",
                 line=dict(color="#888888", width=2),
             ))
 
-            # 市值線
             fig4.add_trace(go.Scatter(
-                x=mv_s.index, y=mv_s.values,
+                x=mv_m.index, y=mv_m.values,
                 name="市值",
                 line=dict(color="#2EC4B6", width=2.5),
             ))
 
             # 最高市值標注
-            mv_max_date = mv_s.idxmax()
-            mv_max = mv_s.max()
+            mv_max_date = mv_m.idxmax()
+            mv_max = mv_m.max()
             fig4.add_annotation(
                 x=mv_max_date, y=mv_max,
-                text=f"最高:{mv_max/10000:,.1f} 萬",
+                text=f"最高:{mv_max:.2f}M",
                 showarrow=True, ay=-30, ax=0,
                 font=dict(color="#2EC4B6", size=11)
             )
 
-            # 最新市值 + 成本標注（靠右）
-            last_mv   = mv_s.iloc[-1]
-            last_cc   = cc_s.iloc[-1]
+            # 最新市值 + 成本標注
+            last_mv   = mv_m.iloc[-1]
+            last_cc   = cc_m.iloc[-1]
             last_pnl  = last_mv - last_cc
-            last_date = mv_s.index[-1]
+            last_date = mv_m.index[-1]
 
             fig4.add_annotation(
                 x=last_date, y=last_mv,
-                text=f"最新:{last_mv/10000:,.1f} 萬",
+                text=f"最新:{last_mv:.2f}M",
                 showarrow=True, ay=-30, ax=-50,
                 font=dict(color="#2EC4B6", size=11)
             )
             fig4.add_annotation(
                 x=last_date, y=last_cc,
-                text=f"成本:{last_cc/10000:,.1f} 萬",
+                text=f"成本:{last_cc:.2f}M",
                 showarrow=True, ay=30, ax=-50,
                 font=dict(color="#888888", size=11)
             )
@@ -793,13 +795,22 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
             sign = "+" if last_pnl >= 0 else ""
             fig4.update_layout(
                 height=380,
-                margin=dict(l=10, r=10, t=30, b=10),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                yaxis=dict(title="金額 (NT$)", tickformat=",.0f"),
+                margin=dict(l=10, r=10, t=50, b=10),  # t=50 給標題空間
+                legend=dict(
+                    orientation="h",
+                    yanchor="top", y=-0.08,   # ← legend 移到圖下方
+                    xanchor="right", x=1
+                ),
+                yaxis=dict(
+                    title="百萬 (NT$)",
+                    tickformat=".1f",          # 例：9.3 而不是 9,300,000
+                    ticksuffix=" M",
+                ),
                 title=dict(
-                    text=f"目前損益：{sign}NT$ {last_pnl/10000:,.1f} 萬",
+                    text=f"目前損益：{sign}NT$ {last_pnl:.2f}M",
                     font=dict(color=pnl_color, size=14),
                     x=0.01,
+                    y=0.97,                    # 標題貼頂
                 )
             )
             st.plotly_chart(fig4, use_container_width=True)
