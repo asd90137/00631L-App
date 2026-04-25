@@ -619,7 +619,7 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
                           showlegend=False, yaxis=dict(title="金額 (NT$)"))
         st.plotly_chart(fig, use_container_width=True)
     with col_d:
-        st.info(f"💡 **台股獨立淨資產 (FC_TW)**\n\nNT$ {port['fc_tw_twd']/10000:,.1f} 萬\n\n*台股市值 + 台幣現金 − 總信貸*")
+        st.info(f"💡 **台股獨立淨資產**\n\nNT$ {port['fc_tw_twd']/10000:,.1f} 萬\n\n*台股市值 + 台幣現金 − 總信貸*")
 
     # --- 逐筆戰績 ---
     with st.expander(f"📜 逐筆投資戰績表 (目前現價: {p_tw_curr:.2f})", expanded=False):
@@ -832,7 +832,7 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
         st.plotly_chart(fig, use_container_width=True)
     with col_info:
         fc_us = port["fc_us_usd"]
-        st.info(f"💡 **美股獨立淨資產 (FC_US)**\n\nUS$ {fc_us:,.0f}\n\n*美股市值 + 美股現金 + CD停泊*")
+        st.info(f"💡 **美股獨立淨資產**\n\nUS$ {fc_us:,.0f}\n\n*美股市值 + 美股現金 + CD停泊*")
 
     # 個股明細
     st.subheader("📦 個股明細")
@@ -928,7 +928,7 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years: int, target_k: flo
     pct_tot  = port["pct_total"]
 
     st.markdown(f"""
-| 戰區 | 曝險金額 (台幣) | 淨資產 (FC) | 獨立曝險度 |
+| 戰區 | 曝險金額  | 淨資產 | 獨立曝險度 |
 | :--- | :--- | :--- | :--- |
 | 💰 台股 | NT$ {exp_tw/10000:,.0f} 萬 | NT$ {fc_tw/10000:,.0f} 萬 | **{pct_tw:.1f}%** |
 | 💵 美股 | NT\$ {exp_us/10000:,.0f} 萬<br/><span style="font-size: 0.85em; color: gray;"> {port['exp_us_usd']:,.0f} | NT\$ {fc_us/10000:,.0f} 萬<br/><span style="font-size: 0.85em; color: gray;">  {port['fc_us_usd']:,.0f} | **{pct_us:.1f}%** |
