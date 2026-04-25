@@ -9,7 +9,7 @@ import calendar
 import pytz
 import streamlit as st
 # ... (其他 import) ...
-
+    
 # ==========================================
 # 時間複利戰情室 V11.0 - 模組化整理版
 # 長線決策大腦 ╳ 絕對紀律執行 (開發者：賴賴)
@@ -735,7 +735,7 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
                 fig3.update_yaxes(range=[min(pi*1.2, -15), max(px*1.2, 20)])
                 st.plotly_chart(fig3, use_container_width=True)
 
-# D. 成本 vs 市值（金額軌跡）
+        # D. 成本 vs 市值（金額軌跡）
         st.write("💴 **D. 庫存成本 vs 市值 金額軌跡**")
         if not buy_df.empty:
             market_val = ds * rp
@@ -787,30 +787,31 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
                 font=dict(color="#888888", size=11)
             )
 
+            pnl_color = "#2EC4B6" if last_pnl >= 0 else "#E71D36"
+            sign = "+" if last_pnl >= 0 else ""
+
             fig4.update_layout(
-                height=380,
-                margin=dict(l=10, r=10, t=10, b=10),  # ← t 縮小，不需要留標題空間
+                height=420,
+                margin=dict(l=10, r=10, t=70, b=10),  # t=70 留給兩行標題
                 legend=dict(
                     orientation="h",
                     yanchor="top", y=-0.08,
                     xanchor="right", x=1
                 ),
                 yaxis=dict(
-                    title="百萬 (NT$)",
+                    title="",          # Y軸標題拿掉
                     tickformat=".1f",
                     ticksuffix=" M",
                 ),
+                title=dict(
+                    text=f"　<br>目前損益：{sign}NT$ {last_pnl:.2f}M",  # 第一行空白換行
+                    font=dict(color=pnl_color, size=14),
+                    x=0.01,
+                    y=0.97,
+                )
             )
             st.plotly_chart(fig4, use_container_width=True)
 
-            # 損益顯示移到圖外下方
-            pnl_color = "normal" if last_pnl >= 0 else "inverse"
-            sign = "+" if last_pnl >= 0 else ""
-            st.metric(
-                label="目前損益",
-                value=f"{sign}NT$ {last_pnl:.2f}M",
-                delta=f"{sign}{last_pnl/last_cc*100:.1f}%" if last_cc > 0 else "0%"
-            )
     except Exception as e:
         st.error(f"圖表載入失敗，請稍後重試。({e})")
 
