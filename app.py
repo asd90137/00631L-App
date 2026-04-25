@@ -744,9 +744,15 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
             mv_s = market_val.dropna()
             cc_s = cum_cost.reindex(mv_s.index).ffill()
 
-            # 轉換為百萬單位
-            mv_m  = mv_s  / 1_000_000
-            cc_m  = cc_s  / 1_000_000
+            mv_m = mv_s / 1_000_000
+            cc_m = cc_s / 1_000_000
+
+            last_mv   = mv_m.iloc[-1]
+            last_cc   = cc_m.iloc[-1]
+            last_pnl  = last_mv - last_cc
+            last_date = mv_m.index[-1]
+            mv_max_date = mv_m.idxmax()
+            mv_max = mv_m.max()
 
             fig4 = go.Figure()
 
@@ -762,22 +768,12 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
                 line=dict(color="#2EC4B6", width=2.5),
             ))
 
-            # 最高市值標注
-            mv_max_date = mv_m.idxmax()
-            mv_max = mv_m.max()
             fig4.add_annotation(
                 x=mv_max_date, y=mv_max,
                 text=f"最高:{mv_max:.2f}M",
                 showarrow=True, ay=-30, ax=0,
                 font=dict(color="#2EC4B6", size=11)
             )
-
-            # 最新市值 + 成本標注
-            last_mv   = mv_m.iloc[-1]
-            last_cc   = cc_m.iloc[-1]
-            last_pnl  = last_mv - last_cc
-            last_date = mv_m.index[-1]
-
             fig4.add_annotation(
                 x=last_date, y=last_mv,
                 text=f"最新:{last_mv:.2f}M",
@@ -791,29 +787,30 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
                 font=dict(color="#888888", size=11)
             )
 
-            pnl_color = "#2EC4B6" if last_pnl >= 0 else "#E71D36"
-            sign = "+" if last_pnl >= 0 else ""
             fig4.update_layout(
                 height=380,
-                margin=dict(l=10, r=10, t=50, b=10),  # t=50 給標題空間
+                margin=dict(l=10, r=10, t=10, b=10),  # ← t 縮小，不需要留標題空間
                 legend=dict(
                     orientation="h",
-                    yanchor="top", y=-0.08,   # ← legend 移到圖下方
+                    yanchor="top", y=-0.08,
                     xanchor="right", x=1
                 ),
                 yaxis=dict(
                     title="百萬 (NT$)",
-                    tickformat=".1f",          # 例：9.3 而不是 9,300,000
+                    tickformat=".1f",
                     ticksuffix=" M",
                 ),
-                title=dict(
-                    text=f"目前損益：{sign}NT$ {last_pnl:.2f}M",
-                    font=dict(color=pnl_color, size=14),
-                    x=0.01,
-                    y=0.97,                    # 標題貼頂
-                )
             )
             st.plotly_chart(fig4, use_container_width=True)
+
+            # 損益顯示移到圖外下方
+            pnl_color = "normal" if last_pnl >= 0 else "inverse"
+            sign = "+" if last_pnl >= 0 else ""
+            st.metric(
+                label="目前損益",
+                value=f"{sign}NT$ {last_pnl:.2f}M",
+                delta=f"{sign}{last_pnl/last_cc*100:.1f}%" if last_cc > 0 else "0%"
+            )
     except Exception as e:
         st.error(f"圖表載入失敗，請稍後重試。({e})")
 
