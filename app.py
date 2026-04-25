@@ -847,6 +847,8 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
         pct_d   = (info["curr"] / info["yest"] - 1) * 100 if info["yest"] > 0 else 0
         session_label = info.get("session", "")
         rows.append({
+            "代號": t,
+            "時段": session_label,
             "股數": f"{info['shares']:,.0f}",
             "均價": f"${avg:.2f}",
             "成本": f"${info['cost']:,.0f}",
