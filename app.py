@@ -30,18 +30,18 @@ st.set_page_config(page_title="時間複利戰情室 | 賴賴", page_icon="💰"
 # ──────────────────────────────────────────
 
 class CONFIG:
-TITLE          = "⚔️ 賴賴戰情室 V11.2"
-TICKER_TW      = "00631L"
-TICKER_TW_YF   = "00631L.TW"
-SPLIT_CUTOFF   = pd.to_datetime("2026-03-23")
-SPLIT_RATIO    = 22.0
-SPLIT_THRESH   = 100.0          # 分割前股價門檻
+    TITLE          = "⚔️ 賴賴戰情室 V11.2"
+    TICKER_TW      = "00631L"
+    TICKER_TW_YF   = "00631L.TW"
+    SPLIT_CUTOFF   = pd.to_datetime("2026-03-23")
+    SPLIT_RATIO    = 22.0
+    SPLIT_THRESH   = 100.0          # 分割前股價門檻
 
-```
-US_TICKERS     = ["SOXL", "TMF", "BITX"]
-# 各 ETF「名目槓桿倍數」用於曝險計算
-# TMF = 0：長債持倉不計入股市曝險（與舊版行為一致）
-LEVERAGE_MAP   = {"SOXL": 3, "BITX": 2, "TMF": 0}
+    ```
+    US_TICKERS     = ["SOXL", "TMF", "BITX"]
+    # 各 ETF「名目槓桿倍數」用於曝險計算
+    # TMF = 0：長債持倉不計入股市曝險（與舊版行為一致）
+    LEVERAGE_MAP   = {"SOXL": 3, "BITX": 2, "TMF": 0}
 
 SHEET_TW = "https://docs.google.com/spreadsheets/d/1yYs-JIW4-8jr8EoyyWlydNrE5Gtd_frWdlMQVdn1VYk/edit?usp=sharing"
 SHEET_US = "https://docs.google.com/spreadsheets/d/1-NPhyuRNWSarFPdgHjUkB9J3smSbn3u3fjUbMhMVyfI/edit?usp=sharing"
