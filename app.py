@@ -857,7 +857,6 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
             "今日損益": f"${today_p:+,.2f} ({pct_d:+.2f}%)",
             "總損益":   f"${total_p:+,.2f} ({l_roi*100:+.2f}%)",
             "年化報酬": f"{l_ann:+.2f}%",
-            "時段": session_label,
         })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
