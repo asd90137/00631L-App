@@ -1312,6 +1312,6 @@ with tab4:
 
 st.caption("📱 V11.2 模組化整理版 | 新增南亞科獨立戰情頁面 | 資料 / 計算 / UI 三層分離")
 ```
-
+ 
 if **name** == “**main**” or True:
 main()
