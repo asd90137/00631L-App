@@ -863,7 +863,7 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
     st.write("---")
 
     # ── 資金停泊區 UI (移動至此，移除 expander 改為直接展開) ──
-    st.subheader("🅿️ 資金停泊區（CD / T-Bill / 待轉換）")
+    st.subheader("🅿️ 資金停泊區")
     parking  = cash_parking or []
     tmf_info = us_live.get("TMF", {})
     tmf_val  = tmf_info.get("curr", 0) * tmf_info.get("shares", 0)
