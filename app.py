@@ -738,13 +738,12 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
 # D. 成本 vs 市值（金額軌跡）
         st.write("💴 **D. 庫存成本 vs 市值 金額軌跡**")
         if not buy_df.empty:
-            # ds, dc 已在上方 C 圖計算完畢，直接沿用
-            market_val = ds * rp          # 每日市值（元）
-            cum_cost   = dc               # 每日累積成本（元）
-            pnl_abs    = market_val - cum_cost  # 每日絕對損益（元）
+            market_val = ds * rp
+            cum_cost   = dc
+            pnl_abs    = market_val - cum_cost
 
             mv_s  = market_val.dropna()
-            cc_s  = cum_cost.reindex(mv_s.index).fillna(method="ffill")
+            cc_s  = cum_cost.reindex(mv_s.index).ffill()   # ← 修正這行
             pnl_s = pnl_abs.reindex(mv_s.index).fillna(0)
 
             fig4 = go.Figure()
@@ -763,7 +762,7 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
                 line=dict(color="#2EC4B6", width=2.5),
             ))
 
-            # 損益填色區（市值 vs 成本）
+            # 損益填色區
             fig4.add_trace(go.Scatter(
                 x=list(mv_s.index) + list(cc_s.index[::-1]),
                 y=list(mv_s.values) + list(cc_s.values[::-1]),
@@ -774,28 +773,45 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
                 name="損益區間",
             ))
 
-            # 標注最新市值與成本
-            last_mv  = mv_s.iloc[-1]
-            last_cc  = cc_s.iloc[-1]
-            last_pnl = last_mv - last_cc
+            # 最大最小市值
+            mv_max_date = mv_s.idxmax()
+            mv_min_date = mv_s.idxmin()
+            mv_max = mv_s.max()
+            mv_min = mv_s.min()
+
+            fig4.add_annotation(
+                x=mv_max_date, y=mv_max,
+                text=f"最高市值: {mv_max/10000:,.1f} 萬",
+                showarrow=True, ay=-35, font=dict(color="#2EC4B6", size=11)
+            )
+            fig4.add_annotation(
+                x=mv_min_date, y=mv_min,
+                text=f"最低市值: {mv_min/10000:,.1f} 萬",
+                showarrow=True, ay=35, font=dict(color="#E71D36", size=11)
+            )
+
+            # 最新市值、成本、損益
+            last_mv   = mv_s.iloc[-1]
+            last_cc   = cc_s.iloc[-1]
+            last_pnl  = last_mv - last_cc
             last_date = mv_s.index[-1]
 
             fig4.add_annotation(
                 x=last_date, y=last_mv,
-                text=f"市值: NT$ {last_mv/10000:,.1f} 萬",
-                showarrow=True, ay=-30, font=dict(color="#2EC4B6")
+                text=f"最新市值: {last_mv/10000:,.1f} 萬",
+                showarrow=True, ay=-30, ax=-60, font=dict(color="#2EC4B6", size=11)
             )
             fig4.add_annotation(
                 x=last_date, y=last_cc,
-                text=f"成本: NT$ {last_cc/10000:,.1f} 萬",
-                showarrow=True, ay=30, font=dict(color="#888888")
+                text=f"成本: {last_cc/10000:,.1f} 萬",
+                showarrow=True, ay=30, ax=-60, font=dict(color="#888888", size=11)
             )
 
             pnl_color = "#2EC4B6" if last_pnl >= 0 else "#E71D36"
             sign = "+" if last_pnl >= 0 else ""
             fig4.update_layout(
-                height=400,
-                margin=dict(l=10, r=10, t=30, b=10),
+                height=420,
+                margin=dict(l=10, r=10, t=40, b=10),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 yaxis=dict(title="金額 (NT$)", tickformat=",.0f"),
                 title=dict(
