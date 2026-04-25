@@ -36,8 +36,6 @@ class CONFIG:
     SPLIT_CUTOFF   = pd.to_datetime("2026-03-23")
     SPLIT_RATIO    = 22.0
     SPLIT_THRESH   = 100.0          # 分割前股價門檻
-
-    ```
     US_TICKERS     = ["SOXL", "TMF", "BITX"]
     # 各 ETF「名目槓桿倍數」用於曝險計算
     # TMF = 0：長債持倉不計入股市曝險（與舊版行為一致）
@@ -60,7 +58,6 @@ SNIPER_TABLE = [
     ( -4.0, 0.5, "🟡 波段低接 (0.5x)"),
     ( -3.0, 0.25,"🟢 日常試單 (0.25x)"),
 ]
-```
 
 TW_TZ = pytz.timezone("Asia/Taipei")
 
@@ -160,7 +157,6 @@ pass
 except Exception as e:
 pass  # fallback，錯誤訊息由呼叫端顯示
 
-```
 yf_sym = ticker + ".TW"
 
 # --- yfinance fast_info ---
@@ -193,7 +189,7 @@ try:
                 time_str="歷史資料", age_min=9999, session=get_tw_session_label())
 except Exception:
     return dict(curr=1.0, prev=1.0, source="❌ 完全失敗", time_str="N/A", age_min=99999, session="❓")
-```
+
 
 def _parse_fugle_time(raw_t) -> tuple[str, float]:
 try:
@@ -233,7 +229,6 @@ et_tz = pytz.timezone("America/New_York")
 now_et = dt_mod.datetime.now(et_tz)
 session = _get_us_session_label(now_et)
 
-```
 # ── yfinance 盤前盤後精準抓取 (主引擎) ──
 try:
     tkr = yf.Ticker(ticker)
@@ -258,7 +253,6 @@ except Exception as e:
 # ── 完全失敗的最後防線 ──
 return dict(curr=0.0, prev=0.0, session="❓",
             source="❌ 完全失敗", time_str="N/A", age_min=99999)
-```
 
 def read_gsheets(conn, url: str, **kwargs) -> pd.DataFrame:
 """安全讀取 Google Sheets，失敗回空 DataFrame 並顯示警告"""
@@ -343,7 +337,6 @@ tp_pct=0, next_add_price=0, next_add_shares=0)
 if df_raw.empty:
 return empty
 
-```
 # 動態找欄位（標題含關鍵字即可）
 def find_col(keyword):
     return next((c for c in df_raw.columns if keyword in str(c)), None)
@@ -395,7 +388,6 @@ else:
         result["next_add_price"]  = to_float(fr[col_d]) if col_d else 0
         result["next_add_shares"] = to_float(fr[col_e]) if col_e else 0
 return result
-```
 
 def parse_cash_parking(df_raw: pd.DataFrame) -> list[dict]:
 """
@@ -408,7 +400,6 @@ result = []
 if df_raw.empty:
 return result
 
-```
 col_type = next((c for c in df_raw.columns if "停泊" in str(c) or "類型" in str(c) and "停" in str(c)), None)
 col_amt  = next((c for c in df_raw.columns if "停泊" in str(c) and "金額" in str(c) or ("金額" in str(c))), None)
 col_mat  = next((c for c in df_raw.columns if "到期" in str(c)), None)
@@ -439,7 +430,6 @@ for _, row in df_raw.iterrows():
         maturity=mat_date, days_left=days_left, note=note
     ))
 return result
-```
 
 def compute_portfolio(tw_trade: dict, us_live: dict,
 p_tw_curr: float, p_tw_yest: float,
@@ -459,7 +449,6 @@ pct_tw      = (exp_tw_twd / fc_tw_twd * 100) if fc_tw_twd > 0 else 0
 daily_pnl_twd = (p_tw_curr - p_tw_yest) * tw_trade["shares"]
 roi_tw      = (val_tw_twd / cost_tw_twd - 1) if cost_tw_twd > 0 else 0
 
-```
 # --- 美股 ---
 val_us_usd  = sum(v["shares"] * v["curr"] for v in us_live.values())
 cost_us_usd = sum(v["cost"]   for v in us_live.values())
@@ -489,7 +478,7 @@ return dict(
 
     fc_total_twd=fc_total_twd, exp_total_twd=exp_total_twd, pct_total=pct_total,
 )
-```
+
 
 # ──────────────────────────────────────────
 
@@ -522,7 +511,7 @@ val    = port["val_tw_twd"]
 roi    = port["roi_tw"]
 min_date = tw_trade["min_date"]
 
-```
+
 days = max((datetime.today() - min_date).days, 1) if pd.notnull(min_date) else 1
 ann_roi = ((1 + roi) ** (365 / days) - 1) * 100
 daily_pct = (p_tw_curr / p_tw_yest - 1) * 100 if p_tw_yest > 0 else 0
@@ -665,7 +654,7 @@ _render_tw_charts(tw_trade, p_tw_curr, p_tw_yest)
 
 st.divider()
 st.link_button("🛒 新增台股交易紀錄 (Google Sheets)", CONFIG.SHEET_TW, use_container_width=True)
-```
+
 
 def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
 """台股三張戰術圖表"""
@@ -674,7 +663,7 @@ hist = yf.download(CONFIG.TICKER_TW_YF, period="5y", progress=False)
 raw_close = (hist["Close"][CONFIG.TICKER_TW_YF]
 if isinstance(hist.columns, pd.MultiIndex) else hist["Close"])
 
-```
+
     # yfinance 的 Close 欄已是 adjusted price（股票分割前的舊價格會自動縮小還原），
     # 不需要再手動除以 SPLIT_RATIO，直接使用即可。
     adj = raw_close.copy()
@@ -751,7 +740,7 @@ if isinstance(hist.columns, pd.MultiIndex) else hist["Close"])
 
 except Exception as e:
     st.error(f"圖表載入失敗，請稍後重試。({e})")
-```
+
 
 def render_tab_us(us_live: dict, port: dict, grid: dict,
 us_cash_usd: float, usd_twd: float, us_session: str = "",
@@ -762,7 +751,7 @@ soxl_curr = soxl.get("curr", 0)
 soxl_yest = soxl.get("yest", 0)
 soxl_daily_pct = (soxl_curr / soxl_yest - 1) * 100 if soxl_yest > 0 else 0
 
-```
+
 # 報價來源與時段
 render_price_freshness(soxl.get("source", ""), soxl.get("time_str", ""), soxl.get("age_min", 99999), us_session)
 
@@ -892,7 +881,7 @@ else:
 
 st.divider()
 st.link_button("🛒 新增美股交易紀錄 (Google Sheets)", CONFIG.SHEET_US, use_container_width=True)
-```
+
 
 def render_tab_lifecycle(port: dict, base_m: float, hc_years: int, target_k: float,
 target_monthly_now: float, inflation_rate: float, withdrawal_rate: float,
@@ -900,7 +889,7 @@ usd_twd: float):
 """Tab 3 生命周期 & 退休"""
 st.subheader("⚖️ 生命周期曝險透視")
 
-```
+
 val_tw  = port["val_tw_twd"]
 val_us  = port["val_us_usd"] * usd_twd
 total_p = val_tw + val_us
@@ -922,7 +911,7 @@ pct_us   = port["pct_us"]
 pct_tot  = port["pct_total"]
 
 st.markdown(f"""
-```
+
 
 |戰區                          |曝險金額 (台幣)                                                                                             |淨資產 (FC)                                                                                             |獨立曝險度             |
 |:---------------------------|:-----------------------------------------------------------------------------------------------------|:----------------------------------------------------------------------------------------------------|:-----------------|
@@ -931,7 +920,7 @@ st.markdown(f"""
 |🔥 綜合                        |**NT$ {exp_tot/10000:,.0f} 萬**                                                                        |**NT$ {fc_total/10000:,.0f} 萬**                                                                      |**{pct_tot:.1f}%**|
 |""", unsafe_allow_html=True)|                                                                                                      |                                                                                                     |                  |
 
-```
+
 # 目標曝險度
 W = fc_total + base_m * 12 * hc_years
 target_exp_val = W * (target_k / 100)
@@ -991,14 +980,14 @@ with st.expander("🛬 降落時程推演表 (Glide Path)", expanded=False):
         e_g = ((cf + h_r) * target_k / 100) / cf * 100 if cf > 0 else 0
         gp.append({"年": f"第 {y} 年", "預估資產(萬)": f"{cf/10000:,.0f}", "應有曝險": f"{e_g:.1f}%"})
     st.table(pd.DataFrame(gp))
-```
+
 
 def render_tab_nanya(price_info: dict):
 """Tab 4 南亞科專屬頁面"""
 p_curr = price_info.get("curr", 0.0)
 p_yest = price_info.get("prev", 0.0)
 
-```
+
 # 員工股固定參數設定
 TOTAL_SHARES = 32_000         # 總數 32 張
 COST_PRICE   = 32.75           # 每股成本
@@ -1088,7 +1077,7 @@ with col_action:
         1. 觀察季線/年線乖離率，若出現極端超買再考慮重新放空。
         2. 越接近解鎖日 (2027/04/16)，鎖定價格的急迫性越高。
     """)
-```
+
 
 # ──────────────────────────────────────────
 
@@ -1100,7 +1089,7 @@ def render_sidebar() -> dict:
 """側邊欄設定，回傳所有參數 dict"""
 st.sidebar.header("🏦 資金與貸款設定")
 
-```
+
 with st.sidebar.expander("🏦 貸款細項設定", expanded=False):
     l1_p = st.number_input("信貸一總額",   value=2_830_000)
     l1_r = st.number_input("年利率1 (%)",  value=2.28)
@@ -1129,7 +1118,7 @@ return dict(
     target_monthly=target_monthly, inflation_rate=inflation_rate,
     withdrawal_rate=withdrawal_rate,
 )
-```
+
 
 # ──────────────────────────────────────────
 
@@ -1148,7 +1137,7 @@ st.markdown("""
 .sub-title { color: #888888 !important; font-size: 37px !important; letter-spacing: 5px !important; font-weight: 300 !important; margin-top: 10px !important; }
 .dash { display: inline !important; }
 
-```
+
         /* 當螢幕寬度小於 768px（手機版）時觸發以下樣式 */
         @media (max-width: 768px) {
             .main-title { font-size: 42px !important; } 
@@ -1311,7 +1300,7 @@ with tab4:
     render_tab_nanya(nanya_price)
 
 st.caption("📱 V11.2 模組化整理版 | 新增南亞科獨立戰情頁面 | 資料 / 計算 / UI 三層分離")
-```
+
 
 if **name** == "**main**" or True:
 main()
