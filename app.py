@@ -955,21 +955,44 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years: int, target_k: flo
         st.success(f"🟢 **目前曝險尚有空間！** 可增加市場部位約 **NT$ {abs(diff)/10000:,.0f} 萬**")
 
     # 退休試算
-    st.divider()
+        st.divider()
     st.subheader("☕ 退休終局與提領反推")
+    st.caption("＊通膨率、提領率等進階參數可在側邊欄「進階參數」中調整（預設：通膨 2%、提領率 4%）")
+
+    # ── 情境 A ──
+    col_a1, col_a2, col_a3 = st.columns([0.8, 0.4, 2])
+    with col_a1:
+        st.markdown("<div style='padding-top:8px'>📈 若工作</div>", unsafe_allow_html=True)
+    with col_a2:
+        hc_years = st.number_input("年限", min_value=1, max_value=40,
+                                   value=hc_years_default, label_visibility="collapsed")
+    with col_a3:
+        st.markdown("<div style='padding-top:8px'>年後退休</div>", unsafe_allow_html=True)
+
     fa = fc_total
     for _ in range(hc_years):
         fa = fa * 1.08 + base_m * 12
     m_a     = fa * withdrawal_rate / 12
     m_a_now = m_a / ((1 + inflation_rate) ** hc_years)
-    st.markdown(f"**📈 情境 A：若工作 {hc_years} 年後退休**")
     ca1, ca2, ca3 = st.columns(3)
     ca1.metric("屆時滾出資產",      f"NT$ {fa/10000:,.0f} 萬")
     ca2.metric("未來每月可領",       f"NT$ {m_a:,.0f}")
     ca3.metric("約等同現在每月可領", f"NT$ {m_a_now:,.0f}")
 
     st.write("")
-    st.markdown(f"**🎯 情境 B：反推想月領 {target_monthly_now/10000:.0f} 萬 (現值) 的退休金**")
+
+    # ── 情境 B ──
+    col_b1, col_b2, col_b3 = st.columns([0.8, 0.4, 2])
+    with col_b1:
+        st.markdown("<div style='padding-top:8px'>🎯 反推月領</div>", unsafe_allow_html=True)
+    with col_b2:
+        target_monthly_wan = st.number_input("月領萬", min_value=1, max_value=100,
+                                             value=int(target_monthly_default // 10_000),
+                                             label_visibility="collapsed")
+    with col_b3:
+        st.markdown("<div style='padding-top:8px'>萬／月（現值）的退休金</div>", unsafe_allow_html=True)
+    target_monthly_now = target_monthly_wan * 10_000
+
     found_y, final_f, final_m = None, 0, 0
     tf = fc_total
     for y in range(1, 41):
@@ -1112,6 +1135,25 @@ def render_sidebar() -> dict:
         l2_d = st.date_input("首次扣款日2",    datetime(2026, 3, 5))
         loan2, pmt2 = calculate_loan(l2_p, l2_r, 10, l2_d)
         st.info(f"貸2剩餘：{loan2/10000:.1f} 萬")
+
+    st.sidebar.divider()
+
+    with st.sidebar.expander("⚙️ 進階參數（通常不需調整）", expanded=False):
+        usd_twd         = st.number_input("4. 目前美元匯率",       value=32.0)
+        target_k        = st.number_input("6. 一生目標曝險度 (%)", value=83)
+        inflation_rate  = st.number_input("8. 預估通膨 (%)",       value=2.0) / 100
+        withdrawal_rate = st.number_input("9. 安全提領率 (%)",     value=4.0) / 100
+
+    # 5 和 7 改在 Tab3 內填寫，這裡給預設值讓 main() 傳入
+    return dict(
+        loan1=loan1, loan2=loan2, pmt1=pmt1, pmt2=pmt2,
+        usd_twd=usd_twd, target_k=target_k,
+        inflation_rate=inflation_rate,
+        withdrawal_rate=withdrawal_rate,
+        # hc_years 和 target_monthly 已移至 Tab3，這裡給佔位預設值
+        hc_years=11,
+        target_monthly=100_000,
+    )
 
     st.sidebar.divider()
     st.sidebar.header("⚙️ 生命周期與退休規劃")
