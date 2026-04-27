@@ -955,7 +955,7 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years: int, target_k: flo
         st.success(f"🟢 **目前曝險尚有空間！** 可增加市場部位約 **NT$ {abs(diff)/10000:,.0f} 萬**")
 
     # 退休試算
-        st.divider()
+    st.divider()
     st.subheader("☕ 退休終局與提領反推")
     st.caption("＊通膨率、提領率等進階參數可在側邊欄「進階參數」中調整（預設：通膨 2%、提領率 4%）")
 
