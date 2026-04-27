@@ -902,8 +902,8 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
     st.link_button("🛒 新增美股交易紀錄 (Google Sheets)", CONFIG.SHEET_US, use_container_width=True)
 
 
-def render_tab_lifecycle(port: dict, base_m: float, hc_years: int, target_k: float,
-                         target_monthly_now: float, inflation_rate: float, withdrawal_rate: float,
+def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, target_k: float,
+                         target_monthly_default: float, inflation_rate: float, withdrawal_rate: float,
                          usd_twd: float):
     """Tab 3 生命周期 & 退休"""
     st.subheader("⚖️ 生命周期曝險透視")
@@ -937,7 +937,7 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years: int, target_k: flo
 """, unsafe_allow_html=True)
 
     # 目標曝險度
-    W = fc_total + base_m * 12 * hc_years
+    W = fc_total + base_m * 12 * hc_years_default
     target_exp_val = W * (target_k / 100)
     target_exp_pct = (target_exp_val / fc_total * 100) if fc_total > 0 else 0
 
@@ -1340,7 +1340,7 @@ def main():
     with tab3:
         render_tab_lifecycle(
             port, base_m,
-            params["hc_years"], params["target_k"],
+            params["hc_years_default"], params["target_k"],
             params["target_monthly"], params["inflation_rate"],
             params["withdrawal_rate"], params["usd_twd"],
         )
