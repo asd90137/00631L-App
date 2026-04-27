@@ -902,8 +902,8 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
     st.link_button("🛒 新增美股交易紀錄 (Google Sheets)", CONFIG.SHEET_US, use_container_width=True)
 
 
-def render_tab_lifecycle(port: dict, base_m: float, hc_years: int, target_k: float,
-                         target_monthly: float, inflation_rate: float, withdrawal_rate: float,
+def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, target_k: float,
+                         target_monthly_default: float, inflation_rate: float, withdrawal_rate: float,
                          usd_twd: float):
     """Tab 3 生命周期 & 退休"""
     st.subheader("⚖️ 生命周期曝險透視")
