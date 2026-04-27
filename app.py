@@ -111,7 +111,7 @@ def get_tw_session_label() -> str:
     wd = now.weekday()  # 0=Mon, 6=Sun
     if wd >= 5:
         return "🌙 週末休市"
-    pre_open  = dt_mod.time(8, 30)
+    pre_open  = dt_mod.time(8, 0)
     open_t    = dt_mod.time(9, 0)
     close_t   = dt_mod.time(13, 30)
     after_t   = dt_mod.time(14, 30)   # 盤後定價交易結束
@@ -120,7 +120,7 @@ def get_tw_session_label() -> str:
     if open_t <= t < close_t:
         return "☀️ 盤中"
     if close_t <= t < after_t:
-        return "🌆 盤後定價"
+        return "🌆 盤後"
     return "🌙 休市"
 
 
