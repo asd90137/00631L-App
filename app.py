@@ -959,15 +959,10 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
     st.subheader("☕ 退休終局與提領反推")
     st.caption("＊通膨率、提領率等進階參數可在側邊欄「進階參數」中調整（預設：通膨 2%、提領率 4%）")
 
-    # ── 情境 A ──
-    col_a1, col_a2, col_a3 = st.columns([0.8, 0.4, 2])
-    with col_a1:
-        st.markdown("<div style='padding-top:8px'>📈 若工作</div>", unsafe_allow_html=True)
-    with col_a2:
-        hc_years = st.number_input("年限", min_value=1, max_value=40,
-                                   value=hc_years_default, label_visibility="collapsed")
-    with col_a3:
-        st.markdown("<div style='padding-top:8px'>年後退休</div>", unsafe_allow_html=True)
+        # ── 情境 A ──
+    st.markdown("**📈 情境 A：若工作幾年後退休？**")
+    hc_years = st.number_input("工作年限（年）", min_value=1, max_value=40,
+                                value=hc_years_default)
 
     fa = fc_total
     for _ in range(hc_years):
@@ -982,15 +977,9 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
     st.write("")
 
     # ── 情境 B ──
-    col_b1, col_b2, col_b3 = st.columns([0.8, 0.4, 2])
-    with col_b1:
-        st.markdown("<div style='padding-top:8px'>🎯 反推月領</div>", unsafe_allow_html=True)
-    with col_b2:
-        target_monthly_wan = st.number_input("月領萬", min_value=1, max_value=100,
-                                             value=int(target_monthly_default // 10_000),
-                                             label_visibility="collapsed")
-    with col_b3:
-        st.markdown("<div style='padding-top:8px'>萬／月（現值）的退休金</div>", unsafe_allow_html=True)
+    st.markdown("**🎯 情境 B：反推想月領幾萬的退休金？**")
+    target_monthly_wan = st.number_input("目標月領（萬）", min_value=1, max_value=100,
+                                         value=int(target_monthly_default // 10_000))
     target_monthly_now = target_monthly_wan * 10_000
 
     found_y, final_f, final_m = None, 0, 0
