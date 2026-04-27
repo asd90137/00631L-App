@@ -1340,7 +1340,7 @@ def main():
     with tab3:
         render_tab_lifecycle(
             port, base_m,
-            params["hc_years_default"], params["target_k"],
+            params["hc_years"], params["target_k"],
             params["target_monthly"], params["inflation_rate"],
             params["withdrawal_rate"], params["usd_twd"],
         )
