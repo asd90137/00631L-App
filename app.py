@@ -7,8 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import calendar
 import pytz
-import streamlit as st
-# ... (其他 import) ...
+from streamlit_autorefresh import st_autorefresh
 
 # ==========================================
 # 時間複利戰情室 V11.0 - 模組化整理版
@@ -1166,6 +1165,10 @@ def render_sidebar() -> dict:
 # ──────────────────────────────────────────
 
 def main():
+    # 👇 在 main() 的最開頭加上這行 👇
+    # interval=60000 代表 60000 毫秒 (即 60 秒)
+    # key="war_room_refresh" 是給這個計時器一個專屬的內部標籤，避免衝突
+    st_autorefresh(interval=60000, key="war_room_refresh")
     # 這裡取代原本的 st.title(CONFIG.TITLE)
     # ② 顯示戰情室大標題 (強制放大版)
     st.markdown("""
