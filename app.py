@@ -525,29 +525,6 @@ def render_price_freshness(source: str, time_str: str, age_min: float, session: 
     else:
         st.caption(f"{source}{session_tag} ｜ 使用歷史收盤價（{time_str}）")
 
-
-def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float,
-                  base_m: float, loan1: float, loan2: float, cash_twd: float,
-                  tw_price: dict = None):
-    """Tab 1 台股完整 UI"""
-    # 報價來源 caption（放在 Tab1 內部頂端）
-    if tw_price:
-        render_price_freshness(tw_price["source"], tw_price["time_str"], tw_price["age_min"], tw_price.get("session", ""))
-    tx_data = fetch_tx_intraday()
-    render_sparkline_card(tx_data)
-    
-    st.divider()
-    shares = tw_trade["shares"]
-    cost   = port["cost_tw_twd"]
-    val    = port["val_tw_twd"]
-    roi    = port["roi_tw"]
-    min_date = tw_trade["min_date"]
-
-    days = max((datetime.today() - min_date).days, 1) if pd.notnull(min_date) else 1
-    ann_roi = ((1 + roi) ** (365 / days) - 1) * 100
-    daily_pct = (p_tw_curr / p_tw_yest - 1) * 100 if p_tw_yest > 0 else 0
-
-    # --- 基本指標列 ---
 def render_sparkline_card(data_dict: dict):
     """渲染像股票 App 般的極簡走勢圖看板"""
     if not data_dict or data_dict["history"].empty:
@@ -608,6 +585,31 @@ def render_sparkline_card(data_dict: dict):
         
     st.markdown("<br>", unsafe_allow_html=True)
 
+def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float,
+                  base_m: float, loan1: float, loan2: float, cash_twd: float,
+                  tw_price: dict = None):
+    """Tab 1 台股完整 UI"""
+    # 報價來源 caption（放在 Tab1 內部頂端）
+    if tw_price:
+        render_price_freshness(tw_price["source"], tw_price["time_str"], tw_price["age_min"], tw_price.get("session", ""))
+    
+    # 🚀 呼叫台指期走勢圖
+    tx_data = fetch_tx_intraday()
+    render_sparkline_card(tx_data)
+    
+    st.divider()
+    
+    shares = tw_trade["shares"]
+    cost   = port["cost_tw_twd"]
+    val    = port["val_tw_twd"]
+    roi    = port["roi_tw"]
+    min_date = tw_trade["min_date"]
+
+    days = max((datetime.today() - min_date).days, 1) if pd.notnull(min_date) else 1
+    ann_roi = ((1 + roi) ** (365 / days) - 1) * 100
+    daily_pct = (p_tw_curr / p_tw_yest - 1) * 100 if p_tw_yest > 0 else 0
+
+    # --- 基本指標列 ---
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("市值",       f"{val/10000:,.0f} 萬")
     c2.metric("成本",       f"{cost/10000:,.0f} 萬")
@@ -738,6 +740,7 @@ def render_sparkline_card(data_dict: dict):
                     "總報酬": f"{l_roi*100:+.1f}%",
                 })
             st.dataframe(pd.DataFrame(recs), use_container_width=True, hide_index=True)
+
 
     # --- 圖表分析 ---
     st.subheader("🌐 戰術圖表分析")
