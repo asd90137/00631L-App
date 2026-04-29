@@ -276,6 +276,36 @@ def calculate_loan(principal: float, annual_rate_pct: float,
     rem = (principal * ((1+r)**N - (1+r)**passed) / ((1+r)**N - 1)) if r > 0 else max(0, principal - pmt * passed)
     return max(0.0, rem), pmt
 
+@st.cache_data(ttl=CONFIG.PRICE_TTL)
+def fetch_tx_intraday() -> dict:
+    """
+    抓取台指期近月 (WTX=F) 或大盤 (^TWII) 當日 1 分鐘 K 線
+    回傳 dict: curr, prev, history (Series)
+    """
+    try:
+        # 優先抓取台指期近月
+        tkr = yf.Ticker("WTX=F")
+        # 抓取最近一天的 1 分鐘 K 線
+        hist = tkr.history(period="1d", interval="1m", progress=False)
+        
+        if hist.empty:
+            # 備援：若台指期抓不到，改抓台灣加權指數
+            tkr = yf.Ticker("^TWII")
+            hist = tkr.history(period="1d", interval="1m", progress=False)
+            
+        if not hist.empty:
+            curr = float(hist["Close"].iloc[-1])
+            # 取得昨收價來計算漲跌
+            prev = float(tkr.fast_info.previous_close)
+            
+            # 若 fast_info 異常，用當日開盤價當作保底基準
+            if prev == 0 or pd.isna(prev):
+                prev = float(hist["Open"].iloc[0])
+                
+            return {"curr": curr, "prev": prev, "history": hist["Close"]}
+    except Exception:
+        pass
+    return None
 
 # ──────────────────────────────────────────
 # ④ 業務邏輯層
@@ -503,6 +533,10 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
     # 報價來源 caption（放在 Tab1 內部頂端）
     if tw_price:
         render_price_freshness(tw_price["source"], tw_price["time_str"], tw_price["age_min"], tw_price.get("session", ""))
+    tx_data = fetch_tx_intraday()
+    render_sparkline_card(tx_data)
+    
+    st.divider()
     shares = tw_trade["shares"]
     cost   = port["cost_tw_twd"]
     val    = port["val_tw_twd"]
@@ -514,6 +548,66 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
     daily_pct = (p_tw_curr / p_tw_yest - 1) * 100 if p_tw_yest > 0 else 0
 
     # --- 基本指標列 ---
+def render_sparkline_card(data_dict: dict):
+    """渲染像股票 App 般的極簡走勢圖看板"""
+    if not data_dict or data_dict["history"].empty:
+        return
+
+    curr = data_dict["curr"]
+    prev = data_dict["prev"]
+    hist = data_dict["history"]
+    
+    diff = curr - prev
+    pct = (diff / prev) * 100 if prev > 0 else 0
+    
+    # 台灣股市習慣：紅漲綠跌
+    color = "#ff4b4b" if diff >= 0 else "#09ab3b"
+    sign = "▲" if diff >= 0 else "▼"
+    
+    # --- 繪製 Plotly 極簡走勢圖 ---
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=hist.index, 
+        y=hist.values,
+        mode='lines',
+        line=dict(color=color, width=2.5),
+        hoverinfo='y',
+    ))
+    
+    # 徹底隱藏背景、格線與 X/Y 軸
+    y_min, y_max = hist.min(), hist.max()
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=0, b=0),
+        height=80,  # 壓低高度，呈現橫條感
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(visible=False, showgrid=False),
+        yaxis=dict(visible=False, showgrid=False, range=[y_min * 0.999, y_max * 1.001]),
+        showlegend=False,
+        hovermode="x unified"
+    )
+    
+    # --- UI 組合排版 ---
+    st.markdown("""
+        <style>
+        .tx-title { font-size: 14px; color: #888; margin-bottom: 2px; }
+        .tx-price { font-size: 32px; font-weight: bold; line-height: 1.1; margin-bottom: 4px; }
+        .tx-diff { font-size: 16px; font-weight: bold; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # 切割為左右兩區塊：左邊大字數據，右邊走勢圖
+    c1, c2 = st.columns([1.2, 2.8])
+    with c1:
+        st.markdown("<div class='tx-title'>台指期近月 (WTX)</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='tx-price' style='color: {color};'>{curr:,.0f}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='tx-diff' style='color: {color};'>{sign} {abs(diff):.0f} ({pct:+.2f}%)</div>", unsafe_allow_html=True)
+    with c2:
+        # config 隱藏右上角浮動工具列，讓它更像原生 App 元件
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        
+    st.markdown("<br>", unsafe_allow_html=True)
+
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("市值",       f"{val/10000:,.0f} 萬")
     c2.metric("成本",       f"{cost/10000:,.0f} 萬")
