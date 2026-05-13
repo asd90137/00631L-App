@@ -790,7 +790,7 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
               f"${g['tp_price']:.2f}", f"{tp_dist:+.2f}%" if soxl_curr > 0 and g["tp_price"] > 0 else "N/A")
     if g["next_add_price"] > 0:
         c5.metric(f"加碼股價 ({g['next_add_shares']:,.0f} 股)",
-                  f"${g['next_add_price']:.2f}", f"差距 {add_dist:+.2f}%" if soxl_curr > 0 else "N/A")
+                  f"${g['next_add_price']:.2f}", f"{add_dist:+.2f}%" if soxl_curr > 0 else "N/A")
     else:
         c5.metric("加碼股價", "已滿倉", "無加碼空間")
 
