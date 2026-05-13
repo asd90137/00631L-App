@@ -784,10 +784,10 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
 
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("目前進度",  f"第 {g['tranche_no']} 份")
-    c2.metric("目前股價",  f"${soxl_curr:.2f}", f"今日 {soxl_daily_pct:+.2f}%")
+    c2.metric("目前股價",  f"${soxl_curr:.2f}", f"{soxl_daily_pct:+.2f}%")
     c3.metric(f"平均股價 ({g['total_shares']:,.0f} 股)", f"${g['avg_price']:.2f}", f"{cur_roi:+.2f}%")
     c4.metric(f"目標停利 ({g['tp_pct']:.0f}%,  預估+${est_profit:,.0f})",
-              f"${g['tp_price']:.2f}", f"差距 {tp_dist:+.2f}%" if soxl_curr > 0 and g["tp_price"] > 0 else "N/A")
+              f"${g['tp_price']:.2f}", f"{tp_dist:+.2f}%" if soxl_curr > 0 and g["tp_price"] > 0 else "N/A")
     if g["next_add_price"] > 0:
         c5.metric(f"加碼股價 ({g['next_add_shares']:,.0f} 股)",
                   f"${g['next_add_price']:.2f}", f"差距 {add_dist:+.2f}%" if soxl_curr > 0 else "N/A")
