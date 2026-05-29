@@ -949,8 +949,6 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
         })
 
     st.dataframe(pd.DataFrame(rows_target), use_container_width=True, hide_index=True)
-    st.caption("＊「次」= 複利計算單位，可視為每次波段漲幅；計算含複利效果")
-    st.divider()
 
 
     fc_tw    = port["fc_tw_twd"]
