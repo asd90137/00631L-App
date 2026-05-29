@@ -916,6 +916,42 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
     c1, c2 = st.columns(2)
     c1.metric("💰 台股投資組合佔比", f"{tw_pct:.1f}%")
     c2.metric("💵 美股投資組合佔比", f"{us_pct:.1f}%")
+    # ── 目標達成計算器 ──
+    st.subheader("🎯 目標達成計算器")
+    TARGET = 20_000_000  # 2000 萬
+
+    fc_total_now = port["fc_total_twd"]
+    gap = TARGET - fc_total_now
+    gap_pct = (TARGET / fc_total_now - 1) * 100 if fc_total_now > 0 else 0
+
+    col_t1, col_t2 = st.columns(2)
+    col_t1.metric("目標資產", f"NT$ {TARGET/10000:,.0f} 萬")
+    col_t2.metric("目前資產", f"NT$ {fc_total_now/10000:,.1f} 萬")
+
+    if gap > 0:
+        st.error(f"📉 距離目標還差 **NT$ {gap/10000:,.1f} 萬**（需再成長 **{gap_pct:.1f}%**）")
+    else:
+        st.success(f"🎉 已超越目標！超出 NT$ {abs(gap)/10000:,.1f} 萬")
+
+    # 各報酬率需要幾次複利
+    rows_target = []
+    for r in [2, 3, 4, 5, 6, 7]:
+        if fc_total_now <= 0 or fc_total_now >= TARGET:
+            n = 0
+        else:
+            import math
+            n = math.ceil(math.log(TARGET / fc_total_now) / math.log(1 + r / 100))
+        total_after = fc_total_now * ((1 + r / 100) ** n)
+        rows_target.append({
+            "每次漲幅": f"+{r}%",
+            "需要幾次": f"{n} 次",
+            "複利後資產 (萬)": f"{total_after/10000:,.1f}",
+        })
+
+    st.dataframe(pd.DataFrame(rows_target), use_container_width=True, hide_index=True)
+    st.caption("＊「次」= 複利計算單位，可視為每次波段漲幅；計算含複利效果")
+    st.divider()
+
 
     fc_tw    = port["fc_tw_twd"]
     fc_us    = port["fc_us_usd"] * usd_twd
