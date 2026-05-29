@@ -929,7 +929,7 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
     col_t2.metric("目前資產", f"NT$ {fc_total_now/10000:,.1f} 萬")
 
     if gap > 0:
-        st.error(f"📉 距離目標還差 **NT$ {gap/10000:,.1f} 萬**（需再成長 **{gap_pct:.1f}%**）")
+        st.error(f"📉 距離目標還差 **NT$ {gap/10000:,.1f} 萬**（**{gap_pct:.1f}%**）")
     else:
         st.success(f"🎉 已超越目標！超出 NT$ {abs(gap)/10000:,.1f} 萬")
 
