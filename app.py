@@ -28,7 +28,7 @@ class CONFIG:
     SPLIT_RATIO    = 22.0
     SPLIT_THRESH   = 100.0          # 分割前股價門檻
 
-    US_TICKERS = ["SOXL", "TMF", "BITX", "QQQM", "BOXX"", "MUU"]
+    US_TICKERS = ["SOXL", "TMF", "BITX", "QQQM", "BOXX", "MUU"]
     # 各 ETF「名目槓桿倍數」用於曝險計算
     # TMF = 0：長債持倉不計入股市曝險（與舊版行為一致）
     LEVERAGE_MAP = {"SOXL": 3, "BITX": 2, "TMF": 0, "QQQM": 1, "BOXX": 0, "MUU": 2}
