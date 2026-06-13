@@ -755,8 +755,17 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
             st.plotly_chart(fig4, use_container_width=True)
 
             # 損益單獨一行顯示在圖下方
+            hist_pnl_m   = (mv_m - cc_m)[cc_m > 0]   # 只看有成本的區間
+            max_pnl_m    = hist_pnl_m.max()
+            max_pnl_date = hist_pnl_m.idxmax().strftime("%Y-%m-%d")
+
             pnl_color = "#2EC4B6" if last_pnl >= 0 else "#E71D36"
-            st.markdown(f"<p style='color:{pnl_color}; font-size:16px; margin:0'>目前損益：{sign}NT$ {last_pnl:.2f}M</p>", unsafe_allow_html=True)
+            st.markdown(
+                f"<p style='color:#FFD700; font-size:16px; margin:0'>🏆 歷史最大損益：+NT$ {max_pnl_m:.2f}M　（{max_pnl_date}）</p>"
+                f"<p style='color:{pnl_color}; font-size:16px; margin:0'>目前損益：{sign}NT$ {last_pnl:.2f}M</p>",
+                unsafe_allow_html=True
+            )
+
     except Exception as e:
         st.error(f"圖表載入失敗，請稍後重試。({e})")
 
