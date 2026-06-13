@@ -741,15 +741,17 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
             mv_m = mv_m.dropna()
             cc_m = cc_m.reindex(mv_m.index)
 
-            last_pnl = mv_m.iloc[-1] - cc_m.iloc[-1]
+            true_cost_m = tw_trade["cost"] / 1_000_000
+            true_val_m  = tw_trade["shares"] * p_tw_curr / 1_000_000
+            last_pnl = true_val_m - true_cost_m
             sign = "+" if last_pnl >= 0 else ""
 
             fig4 = go.Figure()
             fig4.add_trace(go.Scatter(x=cc_m.index, y=cc_m.values, name="累積成本", line=dict(color="#888888", width=2)))
             fig4.add_trace(go.Scatter(x=mv_m.index, y=mv_m.values, name="市值", line=dict(color="#2EC4B6", width=2.5)))
             fig4.add_annotation(x=mv_m.idxmax(), y=mv_m.max(), text=f"最高:{mv_m.max():.2f}M", showarrow=True, ay=-30)
-            fig4.add_annotation(x=mv_m.index[-1], y=mv_m.iloc[-1], text=f"最新:{mv_m.iloc[-1]:.2f}M", showarrow=True, ax=40)
-            fig4.add_annotation(x=cc_m.index[-1], y=cc_m.iloc[-1], text=f"成本:{cc_m.iloc[-1]:.2f}M", showarrow=True, ay=30, ax=40)
+            fig4.add_annotation(x=mv_m.index[-1], y=mv_m.iloc[-1], text=f"最新:{true_val_m:.2f}M", showarrow=True, ax=40)
+            fig4.add_annotation(x=cc_m.index[-1], y=cc_m.iloc[-1], text=f"成本:{true_cost_m:.2f}M", showarrow=True, ay=30, ax=40)
             st.plotly_chart(fig4, use_container_width=True)
 
             # 損益單獨一行顯示在圖下方
