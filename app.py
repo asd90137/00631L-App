@@ -980,8 +980,38 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
 | 🔥 綜合 | **NT$ {exp_tot/10000:,.0f} 萬** | **NT$ {fc_total/10000:,.0f} 萬** | **{pct_tot:.1f}%** |
 """, unsafe_allow_html=True)
 
+        # ── 自動偵測：剛剛動了情境A還是情境B，不用按鈕，看誰的值剛改變 ──
+    cur_hc_years   = st.session_state.get("lc_hc_years", hc_years_default)
+    cur_target_wan = st.session_state.get("lc_target_wan", int(target_monthly_default // 10_000))
+
+    prev_hc_years   = st.session_state.get("_prev_hc_years", cur_hc_years)
+    prev_target_wan = st.session_state.get("_prev_target_wan", cur_target_wan)
+
+    if cur_hc_years != prev_hc_years:
+        st.session_state["lc_basis"] = "A"
+    elif cur_target_wan != prev_target_wan:
+        st.session_state["lc_basis"] = "B"
+    basis = st.session_state.get("lc_basis", "A")
+
+    st.session_state["_prev_hc_years"]   = cur_hc_years
+    st.session_state["_prev_target_wan"] = cur_target_wan
+
+    # 情境B反推年限：在這裡先算好（每次都重算，不會慢半拍）
+    found_y, final_f, final_m = None, 0, 0
+    tf = fc_total
+    for y in range(1, 41):
+        tf = tf * 1.08 + base_m * 12
+        req = (cur_target_wan * 10_000) * ((1 + inflation_rate) ** y)
+        if tf >= (req * 12) / withdrawal_rate:
+            found_y, final_f, final_m = y, tf, req
+            break
+
+    effective_years = cur_hc_years if basis == "A" else (found_y or hc_years_default)
+    note = "" if (basis != "B" or found_y) else "（40年內未達標，暫用預設年限）"
+    st.caption(f"🎛️ 依「{'情境A' if basis == 'A' else '情境B'}」最近的調整，套用 {effective_years} 年{note}")
+
     # 目標曝險度
-    W = fc_total + base_m * 12 * hc_years_default
+    W = fc_total + base_m * 12 * effective_years
     target_exp_val = W * (target_k / 100)
     target_exp_pct = (target_exp_val / fc_total * 100) if fc_total > 0 else 0
 
@@ -1003,10 +1033,10 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
     st.subheader("☕ 退休終局與提領反推")
     st.caption("＊通膨率、提領率等進階參數可在側邊欄「進階參數」中調整（預設：通膨 2%、提領率 4%）")
 
-        # ── 情境 A ──
+    # ── 情境 A ──
     st.markdown("**📈 情境 A：若工作幾年後退休？**")
     hc_years = st.number_input("工作年限（年）", min_value=1, max_value=40,
-                                value=hc_years_default)
+                                value=hc_years_default, key="lc_hc_years")
 
     fa = fc_total
     for _ in range(hc_years):
@@ -1023,17 +1053,8 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
     # ── 情境 B ──
     st.markdown("**🎯 情境 B：反推想月領幾萬的退休金？**")
     target_monthly_wan = st.number_input("目標月領（萬）", min_value=1, max_value=100,
-                                         value=int(target_monthly_default // 10_000))
-    target_monthly_now = target_monthly_wan * 10_000
-
-    found_y, final_f, final_m = None, 0, 0
-    tf = fc_total
-    for y in range(1, 41):
-        tf = tf * 1.08 + base_m * 12
-        req = target_monthly_now * ((1 + inflation_rate) ** y)
-        if tf >= (req * 12) / withdrawal_rate:
-            found_y, final_f, final_m = y, tf, req
-            break
+                                         value=int(target_monthly_default // 10_000), key="lc_target_wan")
+    # found_y / final_f / final_m 已在上面算好，直接沿用，不重算
     if found_y:
         cb1, cb2, cb3 = st.columns(3)
         cb1.metric("需滾出資產",   f"NT$ {final_f/10000:,.0f} 萬")
@@ -1044,10 +1065,10 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
     with st.expander("🛬 降落時程推演表 (Glide Path)", expanded=False):
         gp = []
         cf = fc_total
-        for y in range(hc_years + 1):
+        for y in range(effective_years + 1):
             if y > 0:
                 cf = cf * 1.08 + base_m * 12
-            h_r = max(0, base_m * 12 * hc_years - base_m * 12 * y)
+            h_r = max(0, base_m * 12 * effective_years - base_m * 12 * y)
             e_g = ((cf + h_r) * target_k / 100) / cf * 100 if cf > 0 else 0
             gp.append({"年": f"第 {y} 年", "預估資產(萬)": f"{cf/10000:,.0f}", "應有曝險": f"{e_g:.1f}%"})
         st.table(pd.DataFrame(gp))
