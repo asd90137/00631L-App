@@ -769,8 +769,8 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
             is_today_peak = (max_pnl_date == datetime.today().strftime("%Y-%m-%d"))
             peak_label = "🏆 歷史最大損益🚀" if is_today_peak else "🏆 歷史最大損益"
             st.markdown(
-                f"<p style='color:#FFD700; font-size:16px; margin:0'>{peak_label}：+NT$ {max_pnl_m:.2f}M　（{max_pnl_date}）</p>"
-                f"<p style='color:{pnl_color}; font-size:16px; margin:0'>目前損益：{sign}NT$ {last_pnl:.2f}M</p>",
+                f"<p style='color:#FFD700; font-size:16px; margin:0'>{peak_label}：$ {max_pnl_m:.2f}M（{max_pnl_date}）</p>"
+                f"<p style='color:{pnl_color}; font-size:16px; margin:0'>目前損益：{sign}$ {last_pnl:.2f}M</p>",
                 unsafe_allow_html=True
             )
 
