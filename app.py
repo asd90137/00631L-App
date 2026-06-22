@@ -759,12 +759,21 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
             max_pnl_m    = hist_pnl_m.max()
             max_pnl_date = hist_pnl_m.idxmax().strftime("%Y-%m-%d")
 
+            # 即時報價(Fugle)可能比 yfinance 歷史序列更高（盤中新高）
+            # 兩個比一下，即時損益贏了就以今天為準
+            if last_pnl > max_pnl_m:
+                max_pnl_m    = last_pnl
+                max_pnl_date = datetime.today().strftime("%Y-%m-%d")
+
             pnl_color = "#2EC4B6" if last_pnl >= 0 else "#E71D36"
+            is_today_peak = (max_pnl_date == datetime.today().strftime("%Y-%m-%d"))
+            peak_label = "🏆 歷史最大損益（今日新高🚀）" if is_today_peak else "🏆 歷史最大損益"
             st.markdown(
-                f"<p style='color:#FFD700; font-size:16px; margin:0'>🏆 歷史最大損益：+NT$ {max_pnl_m:.2f}M　（{max_pnl_date}）</p>"
+                f"<p style='color:#FFD700; font-size:16px; margin:0'>{peak_label}：+NT$ {max_pnl_m:.2f}M　（{max_pnl_date}）</p>"
                 f"<p style='color:{pnl_color}; font-size:16px; margin:0'>目前損益：{sign}NT$ {last_pnl:.2f}M</p>",
                 unsafe_allow_html=True
             )
+
 
     except Exception as e:
         st.error(f"圖表載入失敗，請稍後重試。({e})")
