@@ -599,20 +599,29 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
     # ── 階段進度條 ──
     st.subheader("🗺️ 投資階段儀表板")
     pc1, pc2, pc3 = st.columns(3)
+
     with pc1:
         bold = ph.get("phase") == 1
-        st.metric("🌱 累積期 / 20x",
-                  f"{min(multiple, 20):.1f}x",
-                  "👈 當前階段 f"差 {50 - multiple:.1f}x"" if bold else ("✅ 已達標" if multiple >= 20 else ""))
+        st.metric(
+            "🌱 累積期 / 20x",
+            f"{min(multiple, 20):.1f}x",
+            f"👈 當前階段 (差 {20 - multiple:.1f}x)" if bold else ("✅ 已達標" if multiple >= 20 else "")
+        )
+
     with pc2:
         bold = ph.get("phase") == 2
-        st.metric("🛬 滑行期 / 50x",
-                  f"{min(multiple, 50):.1f}x",
-                  "👈 當前階段" if bold else ("✅ 已達標" if multiple >= 50 else ""))
+        st.metric(
+            "🛬 滑行期 / 50x",
+            f"{min(multiple, 50):.1f}x",
+            f"👈 當前階段 (差 {50 - multiple:.1f}x)" if bold else ("✅ 已達標" if multiple >= 50 else "")
+        )
+
     with pc3:
-        st.metric("🏖️ 自由期 / 50x+",
-                  f"{multiple:.1f}x",
-                  "🎉 已達標" if multiple >= 50 else f"差 {50 - multiple:.1f}x")
+        st.metric(
+            "🏖️ 自由期 / 50x+",
+            f"{multiple:.1f}x",
+            "🎉 已達標" if multiple >= 50 else f"差 {50 - multiple:.1f}x"
+        )
 
     overall_prog = min(multiple / 50, 1.0)
     st.progress(overall_prog)
