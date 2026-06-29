@@ -603,7 +603,7 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
         bold = ph.get("phase") == 1
         st.metric("🌱 累積期 / 20x",
                   f"{min(multiple, 20):.1f}x",
-                  "👈 當前階段 差 {50 - multiple:.1f}" if bold else ("✅ 已達標" if multiple >= 20 else ""))
+                  "👈 當前階段 f"差 {50 - multiple:.1f}x"" if bold else ("✅ 已達標" if multiple >= 20 else ""))
     with pc2:
         bold = ph.get("phase") == 2
         st.metric("🛬 滑行期 / 50x",
