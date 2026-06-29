@@ -711,9 +711,15 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
     with col3:
         st.markdown("#### 🚀 今日最終行動指示")
         if status != "鎖定扣款中":
+            # 精確計算缺額：因為存入現金會同時增加總資產(分母)，需使用精確推導公式
+            if target_cr < 1.0:
+                shortfall = (target_cr * port["fc_total_twd"] - cash_twd) / (1 - target_cr)
+            else:
+                shortfall = 0
+                
             st.warning(
                 f"現金比 **{current_cr*100:.1f}%** 低於目標 **{target_cr*100:.1f}%**\n\n"
-                "🔴 停扣蓄水中，持續存入薪資，現金比達標後系統自動解鎖"
+                f"🔴 停扣蓄水中，持續存入薪資 (約缺 **NT$ {max(0, shortfall):,.0f}**)，現金比達標後系統自動解鎖"
             )
         elif final_amt > 0:
             st.success(f"**{action_label}**")
