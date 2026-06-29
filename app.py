@@ -1422,6 +1422,32 @@ def main():
                 .sub-title { font-size: 17px !important; letter-spacing: 2px !important; } 
                 .dash { display: none !important; }
             }
+
+            /* 👇👇👇 新增這段：當螢幕寬度大於 768px（電腦版）時，全局放大字體 👇👇👇 */
+            @media (min-width: 769px) {
+                /* 1. 放大一般文字與提示框 (st.write, st.warning, st.info) */
+                .stMarkdown p, .stMarkdown li, div[data-testid="stAlert"] p {
+                    font-size: 18px !important;
+                    line-height: 1.6 !important;
+                }
+                /* 2. 放大 Metric 指標的標題 (例如：目標現金比) */
+                [data-testid="stMetricLabel"] p {
+                    font-size: 18px !important;
+                }
+                /* 3. 放大 Metric 指標的數值 */
+                [data-testid="stMetricValue"] div {
+                    font-size: 38px !important;
+                }
+                /* 4. 放大 Metric 的漲跌幅 (Delta) */
+                [data-testid="stMetricDelta"] div {
+                    font-size: 18px !important;
+                }
+                /* 5. 放大 Expander (展開清單) 的標題 */
+                .streamlit-expanderHeader p {
+                    font-size: 18px !important;
+                }
+            }
+            /* 👆👆👆 新增結束 👆👆👆 */
         </style>
 
         <div class="war-room-title">
