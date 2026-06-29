@@ -498,20 +498,31 @@ def detect_phase(total_asset_twd: float, annual_expense_twd: float) -> dict:
 def compute_phase1_nav(total_asset_twd: float, cash_twd: float,
                        annual_expense_twd: float) -> dict:
     """
-    第一階段自動導航系統（累積期）。
-    Target_Cash_Ratio = min((Total_Asset / Goal_Value) × 30%, 30%)
-    Base_Amount 透過 session_state 跨 rerun 鎖定：
-      首次跨越「現金充裕」門檻時鎖定新基數；持續充裕時延用舊值不重算。
+    全階段自動導航系統（支援累積期、滑行期、自由期動態現金水位）。
     """
-    goal_value = annual_expense_twd * 20 if annual_expense_twd > 0 else 1.0
-    target_cash_ratio = min((total_asset_twd / goal_value) * 0.30, 0.30)
+    # 1. 計算目前的資產倍數
+    multiple = (total_asset_twd / annual_expense_twd) if annual_expense_twd > 0 else 0.0
+
+    # 2. 根據目前倍數，動態插值計算「目標現金比」
+    if multiple <= 20:
+        # 🌱 第一階段 (0~20x)：現金比 0% ~ 30%
+        target_cash_ratio = (multiple / 20.0) * 0.30
+    elif multiple <= 50:
+        # 🛬 第二階段 (20~50x)：現金比 30% ~ 50%
+        target_cash_ratio = 0.30 + ((multiple - 20.0) / 30.0) * 0.20
+    else:
+        # 🏖️ 第三階段 (50x+)：進入自由期，現金比嚴格固定在 50%
+        target_cash_ratio = 0.50
+
+    # 3. 現金狀態判定
     current_cash_ratio = cash_twd / total_asset_twd if total_asset_twd > 0 else 0.0
     is_sufficient = current_cash_ratio >= target_cash_ratio
 
+    # 4. 系統鎖定邏輯 (跨 rerun 保持基準額)
     prev_status = st.session_state.get("p1_status", "未鎖定")
     if is_sufficient:
         if prev_status != "鎖定扣款中":
-            # 首次跨越門檻 → 鎖定新基數
+            # 首次跨越「現金充裕」門檻時鎖定新基數
             st.session_state["p1_base_amount"] = round(cash_twd / 50, 0)
         st.session_state["p1_status"] = "鎖定扣款中"
     else:
@@ -519,13 +530,12 @@ def compute_phase1_nav(total_asset_twd: float, cash_twd: float,
         st.session_state["p1_base_amount"] = 0.0
 
     return dict(
-        goal_value=goal_value,
         target_cash_ratio=target_cash_ratio,
         current_cash_ratio=current_cash_ratio,
         is_sufficient=is_sufficient,
         base_amount=st.session_state.get("p1_base_amount", 0.0),
         status=st.session_state.get("p1_status", "未鎖定"),
-    )                          
+    )                       
 
 # ──────────────────────────────────────────
 # ⑤ UI 元件層
