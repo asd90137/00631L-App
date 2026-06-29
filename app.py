@@ -602,25 +602,43 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
 
     with pc1:
         bold = ph.get("phase") == 1
+        # 判斷累積期狀態
+        if bold:
+            delta_text = f"👈 當前階段 (差 {20 - multiple:.1f}x)"
+        elif multiple >= 20:
+            delta_text = "✅ 已達標"
+        else:
+            delta_text = "⏳ 未達標"  # 補上狀態，避免空字串
+        
         st.metric(
             "🌱 累積期 / 20x",
             f"{min(multiple, 20):.1f}x",
-            f"👈 當前階段 (差 {20 - multiple:.1f}x)" if bold else ("✅ 已達標" if multiple >= 20 else "")
+            delta_text
         )
 
     with pc2:
         bold = ph.get("phase") == 2
+        # 判斷滑行期狀態
+        if bold:
+            delta_text = f"👈 當前階段 (差 {50 - multiple:.1f}x)"
+        elif multiple >= 50:
+            delta_text = "✅ 已達標"
+        else:
+            delta_text = f"⏳ 未開啟 (差 {50 - multiple:.1f}x)"  # 讓未開啟時也能看到差多少
+        
         st.metric(
             "🛬 滑行期 / 50x",
             f"{min(multiple, 50):.1f}x",
-            f"👈 當前階段 (差 {50 - multiple:.1f}x)" if bold else ("✅ 已達標" if multiple >= 50 else "")
-        )
+            delta_text
+        )    
 
     with pc3:
+        # 自由期狀態
+        delta_text = "🎉 已達標" if multiple >= 50 else f"⏳ 未達標 (差 {50 - multiple:.1f}x)"
         st.metric(
             "🏖️ 自由期 / 50x+",
             f"{multiple:.1f}x",
-            "🎉 已達標" if multiple >= 50 else f"差 {50 - multiple:.1f}x"
+            delta_text
         )
 
     overall_prog = min(multiple / 50, 1.0)
