@@ -624,7 +624,7 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
         elif multiple >= 50:
             delta_text = "✅ 已達標"
         else:
-            delta_text = f"⏳ 未開啟 (差 {50 - multiple:.1f}x)"  # 讓未開啟時也能看到差多少
+            delta_text = f"⏳ 未開啟 (差 {20 - multiple:.1f}x)"  # 讓未開啟時也能看到差多少
         
         st.metric(
             "🛬 滑行期 / 50x",
