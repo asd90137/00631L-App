@@ -708,9 +708,7 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
         final_amt    = 0.0
         action_label = "🔴 停扣蓄水中"
 
-# ── 執行引擎：三張卡片 ──
-    st.subheader("🚨 自動導航執行引擎")
-    st.info("💡 **資金鐵則：** 帳戶請隨時鎖定 6 倍現金流，作為戰略預備金。")
+# ── 執行引擎：三張卡片 ─
 
     cr_ok = current_cr >= target_cr
     cr_color = "#2EC4B6" if cr_ok else "#E71D36"
