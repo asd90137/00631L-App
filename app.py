@@ -1334,13 +1334,60 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
             '</div>'
         )
 
-    zone_html = (
+zone_html = (
         zone_card("💰", "台股", exp_tw, fc_tw, pct_tw) +
         zone_card("💵", "美股", exp_us, fc_us, pct_us, f"（${port['exp_us_usd']:,.0f} / ${port['fc_us_usd']:,.0f}）") +
         zone_card("🔥", "綜合", exp_tot, fc_total, pct_tot)
     )
     st.markdown(zone_css + zone_html, unsafe_allow_html=True)
 
+    # ── 自動偵測：剛剛動了情境A還是情境B，不用按鈕，看誰的值剛改變 ──
+    cur_hc_years   = st.session_state.get("lc_hc_years", hc_years_default)
+    cur_target_wan = st.session_state.get("lc_target_wan", int(target_monthly_default // 10_000))
+
+    prev_hc_years   = st.session_state.get("_prev_hc_years", cur_hc_years)
+    prev_target_wan = st.session_state.get("_prev_target_wan", cur_target_wan)
+
+    if cur_hc_years != prev_hc_years:
+        st.session_state["lc_basis"] = "A"
+    elif cur_target_wan != prev_target_wan:
+        st.session_state["lc_basis"] = "B"
+    basis = st.session_state.get("lc_basis", "A")
+
+    st.session_state["_prev_hc_years"]   = cur_hc_years
+    st.session_state["_prev_target_wan"] = cur_target_wan
+
+    # 情境B反推年限：在這裡先算好（每次都重算，不會慢半拍）
+    found_y, final_f, final_m = None, 0, 0
+    tf = fc_total
+    for y in range(1, 41):
+        tf = tf * 1.08 + base_m * 12
+        req = (cur_target_wan * 10_000) * ((1 + inflation_rate) ** y)
+        if tf >= (req * 12) / withdrawal_rate:
+            found_y, final_f, final_m = y, tf, req
+            break
+
+    effective_years = cur_hc_years if basis == "A" else (found_y or hc_years_default)
+    note = "" if (basis != "B" or found_y) else "（40年內未達標，暫用預設年限）"
+    st.caption(f"🎛️ 依「{'情境A' if basis == 'A' else '情境B'}」最近的調整，套用 {effective_years} 年{note}")
+
+    # 目標曝險度
+    W = fc_total + base_m * 12 * effective_years
+    target_exp_val = W * (target_k / 100)
+    target_exp_pct = (target_exp_val / fc_total * 100) if fc_total > 0 else 0
+
+    # ── 目標 vs 實際曝險度：左右並排大數字 ──
+    diff_color = "#E71D36" if (pct_tot - target_exp_pct) > 0 else "#2EC4B6"
+    compare_html = (
+        '<div style="display:flex; justify-content:space-around; text-align:center; margin:12px 0;">'
+        '<div><div style="font-size:13px; color:#888;">🎯 綜合目標曝險度</div>'
+        f'<div style="font-size:30px; font-weight:800;">{target_exp_pct:.1f}%</div></div>'
+        '<div><div style="font-size:13px; color:#888;">🔥 綜合實際曝險度</div>'
+        f'<div style="font-size:30px; font-weight:800; color:{diff_color};">{pct_tot:.1f}%</div>'
+        f'<div style="font-size:13px; color:{diff_color};">差距 {pct_tot - target_exp_pct:+.1f}%</div></div>'
+        '</div>'
+    )
+    st.markdown(compare_html, unsafe_allow_html=True)
 
     st.subheader("⚖️ 應該如何平衡？")
     diff = exp_tot - target_exp_val
