@@ -708,44 +708,77 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
         final_amt    = 0.0
         action_label = "🔴 停扣蓄水中"
 
-    col1, col2, col3 = st.columns(3)
+# ── 執行引擎：三張卡片 ──
+    st.subheader("🚨 自動導航執行引擎")
+    st.info("💡 **資金鐵則：** 帳戶請隨時鎖定 6 倍現金流，作為戰略預備金。")
 
-    with col1:
-        st.markdown("#### 💧 引擎一：現金比例導航")
-        cr_tag = "🟢" if current_cr >= target_cr else "🔴"
-        st.write(f"**目標現金比：** {target_cr*100:.1f}%")
-        st.write(f"**目前現金比：** {cr_tag} {current_cr*100:.1f}%（差 {(current_cr - target_cr)*100:+.1f}%）")
-        st.write(f"**下次回款日：** {dca_date} {'(🟢 今日!)' if is_dca else ''}")
-        s_color = "🟢" if status == "鎖定扣款中" else "🔴"
-        st.markdown(f"**系統狀態：** {s_color} **{status}**")
-        st.metric("鎖定基準額（cash ÷ 50）", f"NT$ {base_amount:,.0f}")
+    cr_ok = current_cr >= target_cr
+    cr_color = "#2EC4B6" if cr_ok else "#E71D36"
+    status_color = "#2EC4B6" if status == "鎖定扣款中" else "#E71D36"
 
-    with col2:
-        st.markdown("#### 🎯 引擎二：階梯狙擊")
-        st.write(f"**今日漲跌幅：** {daily_pct:+.2f}%")
-        st.write(f"**觸發位階：** {sniper_label}")
-        st.write(f"**加碼公式：** 基準額 × {sniper_mult:.2f}x")
-        st.metric("今日狙擊金額", f"NT$ {sniper_m:,.0f}")
+    card_css = (
+        '<style>'
+        '.eng-card{border-radius:14px; padding:16px 18px; margin-bottom:12px;}'
+        '.eng-title{font-size:15px; font-weight:700; margin-bottom:10px;}'
+        '.eng-row{display:flex; justify-content:space-between; font-size:14px; '
+        'color:#555; margin-bottom:6px;}'
+        '.eng-row b{color:#222;}'
+        '.eng-big{font-size:26px; font-weight:800; margin-top:6px;}'
+        '</style>'
+    )
 
-    with col3:
-        st.markdown("#### 🚀 今日最終行動指示")
-        if status != "鎖定扣款中":
-            # 精確計算缺額：因為存入現金會同時增加總資產(分母)，需使用精確推導公式
-            if target_cr < 1.0:
-                shortfall = (target_cr * port["fc_total_twd"] - cash_twd) / (1 - target_cr)
-            else:
-                shortfall = 0
-                
-            st.warning(
-                f"現金比 **{current_cr*100:.1f}%** 低於目標 **{target_cr*100:.1f}%**\n\n"
-                f"🔴 停扣蓄水中，持續存入薪資 (約缺 **NT$ {max(0, shortfall):,.0f}**)，現金比達標後系統自動解鎖"
-            )
-        elif final_amt > 0:
-            st.success(f"**{action_label}**")
-            st.metric("建議投入本金", f"NT$ {final_amt:,.0f}")
-            st.metric("換算購買股數", f"約 {(final_amt / p_tw_curr):,.0f} 股" if p_tw_curr > 0 else "0 股")
+    # 引擎一：現金比例導航
+    card1 = (
+        f'<div class="eng-card" style="background:{cr_color}14; border:1px solid {cr_color}33;">'
+        '<div class="eng-title">💧 引擎一：現金比例導航</div>'
+        f'<div class="eng-row"><span>目標現金比</span><b>{target_cr*100:.1f}%</b></div>'
+        f'<div class="eng-row"><span>目前現金比</span><b style="color:{cr_color};">{current_cr*100:.1f}%（差 {(current_cr-target_cr)*100:+.1f}%）</b></div>'
+        f'<div class="eng-row"><span>下次回款日</span><b>{dca_date}{" 🟢今日" if is_dca else ""}</b></div>'
+        f'<div class="eng-row"><span>系統狀態</span><b style="color:{status_color};">{status}</b></div>'
+        '<div style="font-size:13px; color:#888; margin-top:8px;">鎖定基準額（cash ÷ 50）</div>'
+        f'<div class="eng-big" style="color:{status_color};">NT$ {base_amount:,.0f}</div>'
+        '</div>'
+    )
+
+    # 引擎二：階梯狙擊
+    sniper_color = "#E71D36" if sniper_m > 0 else "#999"
+    card2 = (
+        f'<div class="eng-card" style="background:{sniper_color}14; border:1px solid {sniper_color}33;">'
+        '<div class="eng-title">🎯 引擎二：階梯狙擊</div>'
+        f'<div class="eng-row"><span>今日漲跌幅</span><b>{daily_pct:+.2f}%</b></div>'
+        f'<div class="eng-row"><span>觸發位階</span><b>{sniper_label}</b></div>'
+        f'<div class="eng-row"><span>加碼公式</span><b>基準額 × {sniper_mult:.2f}x</b></div>'
+        '<div style="font-size:13px; color:#888; margin-top:8px;">今日狙擊金額</div>'
+        f'<div class="eng-big" style="color:{sniper_color};">NT$ {sniper_m:,.0f}</div>'
+        '</div>'
+    )
+
+    st.markdown(card_css + card1 + card2, unsafe_allow_html=True)
+
+    # 今日最終行動指示
+    st.markdown("#### 🚀 今日最終行動指示")
+    if status != "鎖定扣款中":
+        if target_cr < 1.0:
+            shortfall = (target_cr * port["fc_total_twd"] - cash_twd) / (1 - target_cr)
         else:
-            st.info("☕ 現金充足，今日非扣款日且無大跌，靜待機會。")
+            shortfall = 0
+        st.warning(
+            f"現金比 **{current_cr*100:.1f}%** 低於目標 **{target_cr*100:.1f}%**\n\n"
+            f"🔴 停扣蓄水中，持續存入薪資 (約缺 **NT$ {max(0, shortfall):,.0f}**)，現金比達標後系統自動解鎖"
+        )
+    elif final_amt > 0:
+        st.success(f"**{action_label}**")
+        action_html = (
+            '<div style="display:flex; justify-content:space-around; text-align:center; margin-top:6px;">'
+            '<div><div style="font-size:13px; color:#888;">建議投入本金</div>'
+            f'<div style="font-size:24px; font-weight:800; color:#2EC4B6;">NT$ {final_amt:,.0f}</div></div>'
+            '<div><div style="font-size:13px; color:#888;">換算購買股數</div>'
+            f'<div style="font-size:24px; font-weight:800;">{(final_amt / p_tw_curr):,.0f} 股</div></div>'
+            '</div>'
+        )
+        st.markdown(action_html, unsafe_allow_html=True)
+    else:
+        st.info("☕ 現金充足，今日非扣款日且無大跌，靜待機會。")
 
     st.divider()
 
