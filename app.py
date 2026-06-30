@@ -915,53 +915,47 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
 
     st.subheader("🎯 SOXL 網格進出戰略")
 
-    # === 新版 SOXL 網格動態儀表板 ===
-    g = grid
-    curr = soxl_curr
-    avg = g["avg_price"]
-    tp = g["tp_price"]
-    add = g["next_add_price"]
-
-    cur_roi = (curr / avg - 1) * 100 if avg > 0 else 0
-    tp_dist = (tp / curr - 1) * 100 if curr > 0 and tp > 0 else 0
-    add_dist= (add / curr - 1) * 100 if curr > 0 and add > 0 else 0
-    est_profit = (tp - avg) * g["total_shares"] if avg > 0 else 0
-
-    # 1. 動態狀態判斷與文案 (拿掉容易衝突的粗體，改用乾淨排版)
-    if curr >= tp and tp > 0:
-        stage_name = f"🎉 狀態：達標停利 (第 {g['tranche_no']} 份)"
-        status_text = f"💰 預估獲利入袋 +${est_profit:,.0f}"
-    elif curr >= avg:
-        stage_name = f"📈 狀態：獲利向上 (第 {g['tranche_no']} 份)"
-        status_text = f"🎯 距停利 (${tp:.2f}) 還差 ${tp - curr:.2f}"
-    elif curr > add and add > 0:
-        stage_name = f"📉 狀態：蓄水向下 (第 {g['tranche_no']} 份)"
-        status_text = f"⏳ 距加碼 (${add:.2f}) 還差 ${curr - add:.2f}"
-    elif add > 0:
-        stage_name = f"🎯 狀態：觸發加碼 (第 {g['tranche_no']} 份)"
-        status_text = f"🛒 準備買進 {g['next_add_shares']:,.0f} 股"
-    else:
-        stage_name = f"🔒 狀態：已滿倉 (第 {g['tranche_no']} 份)"
-        status_text = f"🎯 距停利 (${tp:.2f}) 還差 ${tp - curr:.2f}"
-
-    # 2. 顯示主大字：目前股價與狀態 (拔除外層的 * 斜體設定)
-    st.metric(stage_name, f"${curr:.2f}", f"{soxl_daily_pct:+.2f}%")
-    st.markdown(status_text)
-
-    # 3. 網格進度條
+# 3. 網格進度條（左：加碼 ／ 中：均價 ／ 右：停利）
     if tp > 0:
-        range_min = add if add > 0 else (avg * 0.7) 
+        range_min = add if add > 0 else (avg * 0.7)
         total_range = tp - range_min
         prog = max(0.0, min((curr - range_min) / total_range, 1.0)) if total_range > 0 else 1.0
-        
+
         st.progress(prog)
-        
-        # 4. 底部資訊整併 (拆成兩行獨立的 caption，用分隔線排版最安全)
-        add_str = f"${add:.2f} ({add_dist:.1f}%)" if add > 0 else "已滿倉"
-        tp_str  = f"${tp:.2f} (+{tp_dist:.1f}%)"
-        
-        st.caption(f"📦 持倉：**{g['total_shares']:,.0f}** 股 ｜ 均價 **${avg:.2f}** (報酬 {cur_roi:+.1f}%)")
-        st.caption(f"⚖️ 區間：加碼 **{add_str}** ↔ 停利 **{tp_str}**")
+
+        add_str = f"${add:.2f}" if add > 0 else "已滿倉"
+        add_sub = f"({add_dist:+.1f}%)" if add > 0 else ""
+        tp_str  = f"${tp:.2f}"
+        tp_sub  = f"(+{tp_dist:.1f}%)"
+
+        st.markdown(f"""
+        <style>
+        .grid-row {{ display:flex; justify-content:space-between; margin-top:4px; }}
+        .grid-box {{ flex:1; }}
+        .grid-box.mid {{ text-align:center; }}
+        .grid-box.right {{ text-align:right; }}
+        .grid-label {{ font-size:13px; color:#888; margin-bottom:2px; }}
+        .grid-value {{ font-size:20px; font-weight:700; }}
+        .grid-sub {{ font-size:13px; color:#999; }}
+        </style>
+        <div class="grid-row">
+            <div class="grid-box">
+                <div class="grid-label">🎯 加碼</div>
+                <div class="grid-value" style="color:#2EC4B6;">{add_str}</div>
+                <div class="grid-sub">{add_sub}</div>
+            </div>
+            <div class="grid-box mid">
+                <div class="grid-label">📦 均價（持倉 {g['total_shares']:,.0f} 股）</div>
+                <div class="grid-value">${avg:.2f}</div>
+                <div class="grid-sub">報酬 {cur_roi:+.1f}%</div>
+            </div>
+            <div class="grid-box right">
+                <div class="grid-label">🏆 停利</div>
+                <div class="grid-value" style="color:#E71D36;">{tp_str}</div>
+                <div class="grid-sub">{tp_sub}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     st.divider()
 
