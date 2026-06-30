@@ -611,45 +611,27 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
     pc1, pc2, pc3 = st.columns(3)
 
     with pc1:
-        bold = ph.get("phase") == 1
-        # 判斷累積期狀態
-        if bold:
+        if multiple < 20:
             delta_text = f"👈 當前階段 (差 {20 - multiple:.1f}x)"
-        elif multiple >= 20:
-            delta_text = "✅ 已達標"
         else:
-            delta_text = "⏳ 未達標"  # 補上狀態，避免空字串
-        
-        st.metric(
-            "🌱 累積期 / 20x",
-            f"{min(multiple, 20):.1f}x",
-            delta_text
-        )
+            delta_text = f"✅ 已通關 (超標 {multiple - 20:.1f}x)"
+        st.metric("🌱 累積期 / 20x", f"{min(multiple, 20):.1f}x", delta_text)
 
     with pc2:
-        bold = ph.get("phase") == 2
-        # 判斷滑行期狀態
-        if bold:
-            delta_text = f"👈 當前階段 (差 {50 - multiple:.1f}x)"
-        elif multiple >= 50:
-            delta_text = "✅ 已達標"
+        if multiple < 20:
+            delta_text = f"⏳ 未開啟 (距門檻差 {20 - multiple:.1f}x)"
+        elif multiple < 50:
+            delta_text = f"👈 當前階段 (距下階段差 {50 - multiple:.1f}x)"
         else:
-            delta_text = f"⏳ 未開啟 (差 {20 - multiple:.1f}x)"  # 讓未開啟時也能看到差多少
-        
-        st.metric(
-            "🛬 滑行期 / 50x",
-            f"{min(multiple, 50):.1f}x",
-            delta_text
-        )    
+            delta_text = f"✅ 已通關 (超標 {multiple - 50:.1f}x)"
+        st.metric("🛬 滑行期 / 50x", f"{min(multiple, 50):.1f}x", delta_text)    
 
     with pc3:
-        # 自由期狀態
-        delta_text = "🎉 已達標" if multiple >= 50 else f"⏳ 未達標 (差 {50 - multiple:.1f}x)"
-        st.metric(
-            "🏖️ 自由期 / 50x+",
-            f"{multiple:.1f}x",
-            delta_text
-        )
+        if multiple < 50:
+            delta_text = f"⏳ 未達標 (差 {50 - multiple:.1f}x)"
+        else:
+            delta_text = f"🎉 自由階段 (超標 {multiple - 50:.1f}x)"
+        st.metric("🏖️ 自由期 / 50x+", f"{multiple:.1f}x", delta_text)
 
     overall_prog = min(multiple / 50, 1.0)
     st.progress(overall_prog)
@@ -657,6 +639,7 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
         f"整體進度 **{multiple:.1f}x / 50x**（{overall_prog*100:.0f}%）｜"
         f"現金目標比 **{ph.get('cash_lo', 0):.0f}%～{ph.get('cash_hi', 0):.0f}%**"
     )
+
 
     # ── 生日再平衡警報 ──
     if birthday:
@@ -1076,18 +1059,30 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
         multiple = ph.get("current_multiple", 0.0)
         st.markdown(f"### {ph.get('phase_name', '')}")
         lc1, lc2, lc3 = st.columns(3)
+        
         with lc1:
-            lc1.metric("🌱 累積期 / 20x",
-                       f"{min(multiple, 20):.1f}x",
-                       "👈 當前" if ph.get("phase") == 1 else ("✅ 已達標" if multiple >= 20 else ""))
+            if multiple < 20:
+                delta_text = f"👈 當前階段 (差 {20 - multiple:.1f}x)"
+            else:
+                delta_text = f"✅ 已通關 (超標 {multiple - 20:.1f}x)"
+            lc1.metric("🌱 累積期 / 20x", f"{min(multiple, 20):.1f}x", delta_text)
+
         with lc2:
-            lc2.metric("🛬 滑行期 / 50x",
-                       f"{min(multiple, 50):.1f}x",
-                       "👈 當前" if ph.get("phase") == 2 else ("✅ 已達標" if multiple >= 50 else ""))
+            if multiple < 20:
+                delta_text = f"⏳ 未開啟 (距門檻差 {20 - multiple:.1f}x)"
+            elif multiple < 50:
+                delta_text = f"👈 當前階段 (距下階段差 {50 - multiple:.1f}x)"
+            else:
+                delta_text = f"✅ 已通關 (超標 {multiple - 50:.1f}x)"
+            lc2.metric("🛬 滑行期 / 50x", f"{min(multiple, 50):.1f}x", delta_text)
+
         with lc3:
-            lc3.metric("🏖️ 自由期 / 50x+",
-                       f"{multiple:.1f}x",
-                       "🎉 已達標" if multiple >= 50 else f"差 {50 - multiple:.1f}x")
+            if multiple < 50:
+                delta_text = f"⏳ 未達標 (差 {50 - multiple:.1f}x)"
+            else:
+                delta_text = f"🎉 自由階段 (超標 {multiple - 50:.1f}x)"
+            lc3.metric("🏖️ 自由期 / 50x+", f"{multiple:.1f}x", delta_text)
+
         prog = min(multiple / 50, 1.0)
         st.progress(prog)
         st.caption(
@@ -1095,6 +1090,7 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
             f"現金目標比 **{ph.get('cash_lo',0):.0f}%～{ph.get('cash_hi',0):.0f}%**"
         )
         st.divider()
+
 
     st.subheader("⚖️ 生命周期曝險透視")
 
