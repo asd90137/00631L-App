@@ -1334,7 +1334,7 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
             '</div>'
         )
 
-zone_html = (
+    zone_html = (
         zone_card("💰", "台股", exp_tw, fc_tw, pct_tw) +
         zone_card("💵", "美股", exp_us, fc_us, pct_us, f"（${port['exp_us_usd']:,.0f} / ${port['fc_us_usd']:,.0f}）") +
         zone_card("🔥", "綜合", exp_tot, fc_total, pct_tot)
