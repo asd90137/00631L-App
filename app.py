@@ -1340,18 +1340,7 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
         zone_card("🔥", "綜合", exp_tot, fc_total, pct_tot)
     )
     st.markdown(zone_css + zone_html, unsafe_allow_html=True)
-# ── 目標 vs 實際曝險度：左右並排大數字 ──
-    diff_color = "#E71D36" if (pct_tot - target_exp_pct) > 0 else "#2EC4B6"
-    compare_html = (
-        '<div style="display:flex; justify-content:space-around; text-align:center; margin:12px 0;">'
-        '<div><div style="font-size:13px; color:#888;">🎯 綜合目標曝險度</div>'
-        f'<div style="font-size:30px; font-weight:800;">{target_exp_pct:.1f}%</div></div>'
-        '<div><div style="font-size:13px; color:#888;">🔥 綜合實際曝險度</div>'
-        f'<div style="font-size:30px; font-weight:800; color:{diff_color};">{pct_tot:.1f}%</div>'
-        f'<div style="font-size:13px; color:{diff_color};">差距 {pct_tot - target_exp_pct:+.1f}%</div></div>'
-        '</div>'
-    )
-    st.markdown(compare_html, unsafe_allow_html=True)
+
 
     st.subheader("⚖️ 應該如何平衡？")
     diff = exp_tot - target_exp_val
