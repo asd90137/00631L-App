@@ -915,26 +915,60 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
 
     st.subheader("🎯 SOXL 網格進出戰略")
 
-    # 網格指標
+    # === 新版 SOXL 網格動態儀表板 ===
     g = grid
-    cur_roi = (soxl_curr / g["avg_price"] - 1) * 100 if g["avg_price"] > 0 else 0
-    tp_dist = (g["tp_price"] / soxl_curr - 1) * 100 if soxl_curr > 0 and g["tp_price"] > 0 else 0
-    add_dist= (g["next_add_price"] / soxl_curr - 1) * 100 if soxl_curr > 0 and g["next_add_price"] > 0 else 0
-    est_profit = (g["tp_price"] - g["avg_price"]) * g["total_shares"] if g["avg_price"] > 0 else 0
+    curr = soxl_curr
+    avg = g["avg_price"]
+    tp = g["tp_price"]
+    add = g["next_add_price"]
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("目前進度",  f"第 {g['tranche_no']} 份")
-    c2.metric("目前股價",  f"${soxl_curr:.2f}", f"{soxl_daily_pct:+.2f}%")
-    c3.metric(f"平均股價 ({g['total_shares']:,.0f} 股)", f"${g['avg_price']:.2f}", f"{cur_roi:+.2f}%")
-    c4.metric(f"目標停利 ({g['tp_pct']:.0f}%,  預估+${est_profit:,.0f})",
-              f"${g['tp_price']:.2f}", f"{tp_dist:+.2f}%" if soxl_curr > 0 and g["tp_price"] > 0 else "N/A")
-    if g["next_add_price"] > 0:
-        c5.metric(f"加碼股價 ({g['next_add_shares']:,.0f} 股)",
-                  f"${g['next_add_price']:.2f}", f"{add_dist:+.2f}%" if soxl_curr > 0 else "N/A")
+    cur_roi = (curr / avg - 1) * 100 if avg > 0 else 0
+    tp_dist = (tp / curr - 1) * 100 if curr > 0 and tp > 0 else 0
+    add_dist= (add / curr - 1) * 100 if curr > 0 and add > 0 else 0
+    est_profit = (tp - avg) * g["total_shares"] if avg > 0 else 0
+
+    # 1. 動態狀態判斷與文案
+    if curr >= tp and tp > 0:
+        stage_name = f"🎉 狀態：達標停利 (第 {g['tranche_no']} 份)"
+        status_text = f"💰 預估獲利入袋 **+${est_profit:,.0f}**"
+    elif curr >= avg:
+        stage_name = f"📈 狀態：獲利向上 (第 {g['tranche_no']} 份)"
+        status_text = f"🎯 距停利 (${tp:.2f}) 還差 **${tp - curr:.2f}**"
+    elif curr > add and add > 0:
+        stage_name = f"📉 狀態：蓄水向下 (第 {g['tranche_no']} 份)"
+        status_text = f"⏳ 距加碼 (${add:.2f}) 還差 **${curr - add:.2f}**"
+    elif add > 0:
+        stage_name = f"🎯 狀態：觸發加碼 (第 {g['tranche_no']} 份)"
+        status_text = f"🛒 準備買進 **{g['next_add_shares']:,.0f}** 股"
     else:
-        c5.metric("加碼股價", "已滿倉", "無加碼空間")
+        stage_name = f"🔒 狀態：已滿倉 (第 {g['tranche_no']} 份)"
+        status_text = f"🎯 距停利 (${tp:.2f}) 還差 **${tp - curr:.2f}**"
+
+    # 2. 顯示主大字：目前股價與狀態
+    st.metric(stage_name, f"${curr:.2f}", f"{soxl_daily_pct:+.2f}%")
+    st.markdown(f"*{status_text}*")
+
+    # 3. 網格進度條 (將「加碼點」到「停利點」視為 0% ~ 100% 的作戰區間)
+    if tp > 0:
+        # 如果已滿倉 (add=0)，就抓均價的 7 折當作進度條底部，讓畫面有空間感
+        range_min = add if add > 0 else (avg * 0.7) 
+        total_range = tp - range_min
+        prog = max(0.0, min((curr - range_min) / total_range, 1.0)) if total_range > 0 else 1.0
+        
+        st.progress(prog)
+        
+        # 4. 底部資訊整併 (原本的 % 數跟均價移到這裡)
+        add_str = f"${add:.2f} ({add_dist:.1f}%)" if add > 0 else "已滿倉"
+        tp_str  = f"${tp:.2f} (+{tp_dist:.1f}%)"
+        
+        st.caption(
+            f"持倉：**{g['total_shares']:,.0f}** 股 (均價 ${avg:.2f}, 報酬 {cur_roi:+.1f}%)<br>"
+            f"區間：加碼 **{add_str}** ↔ 停利 **{tp_str}**", 
+            unsafe_allow_html=True
+        )
 
     st.divider()
+
 
     # 整體美股指標
     val  = port["val_us_usd"]
