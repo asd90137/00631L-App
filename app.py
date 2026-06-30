@@ -915,7 +915,40 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
 
     st.subheader("🎯 SOXL 網格進出戰略")
 
-# 3. 網格進度條（左：加碼 ／ 中：均價 ／ 右：停利）
+# === 新版 SOXL 網格動態儀表板 ===
+    g = grid
+    curr = soxl_curr
+    avg = g["avg_price"]
+    tp = g["tp_price"]
+    add = g["next_add_price"]
+
+    cur_roi = (curr / avg - 1) * 100 if avg > 0 else 0
+    tp_dist = (tp / curr - 1) * 100 if curr > 0 and tp > 0 else 0
+    add_dist = (add / curr - 1) * 100 if curr > 0 and add > 0 else 0
+    est_profit = (tp - avg) * g["total_shares"] if avg > 0 else 0
+
+    # 1. 動態狀態判斷與文案
+    if curr >= tp and tp > 0:
+        stage_name = f"🎉 狀態：達標停利 (第 {g['tranche_no']} 份)"
+        status_text = f"💰 預估獲利入袋 +${est_profit:,.0f}"
+    elif curr >= avg:
+        stage_name = f"📈 狀態：獲利向上 (第 {g['tranche_no']} 份)"
+        status_text = f"🎯 距停利 (${tp:.2f}) 還差 ${tp - curr:.2f}"
+    elif curr > add and add > 0:
+        stage_name = f"📉 狀態：蓄水向下 (第 {g['tranche_no']} 份)"
+        status_text = f"⏳ 距加碼 (${add:.2f}) 還差 ${curr - add:.2f}"
+    elif add > 0:
+        stage_name = f"🎯 狀態：觸發加碼 (第 {g['tranche_no']} 份)"
+        status_text = f"🛒 準備買進 {g['next_add_shares']:,.0f} 股"
+    else:
+        stage_name = f"🔒 狀態：已滿倉 (第 {g['tranche_no']} 份)"
+        status_text = f"🎯 距停利 (${tp:.2f}) 還差 ${tp - curr:.2f}"
+
+    # 2. 顯示主大字：目前股價與狀態
+    st.metric(stage_name, f"${curr:.2f}", f"{soxl_daily_pct:+.2f}%")
+    st.markdown(status_text)
+
+    # 3. 網格進度條（左：加碼 ／ 中：均價 ／ 右：停利）
     if tp > 0:
         range_min = add if add > 0 else (avg * 0.7)
         total_range = tp - range_min
