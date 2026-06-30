@@ -1230,42 +1230,76 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
     tw_pct  = val_tw / total_p * 100 if total_p > 0 else 0
     us_pct  = val_us / total_p * 100 if total_p > 0 else 0
 
-    c1, c2 = st.columns(2)
-    c1.metric("💰 台股投資組合佔比", f"{tw_pct:.1f}%")
-    c2.metric("💵 美股投資組合佔比", f"{us_pct:.1f}%")
+# ── 台股/美股佔比：橫向比例條 ──
+    bar_css = (
+        '<style>'
+        '.alloc-bar{display:flex; width:100%; height:34px; border-radius:8px; '
+        'overflow:hidden; margin:8px 0 4px 0;}'
+        '.alloc-seg{display:flex; align-items:center; justify-content:center; '
+        'color:#fff; font-size:13px; font-weight:700;}'
+        '</style>'
+    )
+    alloc_html = (
+        '<div class="alloc-bar">'
+        f'<div class="alloc-seg" style="width:{tw_pct:.1f}%; background:#E71D36;">💰 台股 {tw_pct:.1f}%</div>'
+        f'<div class="alloc-seg" style="width:{us_pct:.1f}%; background:#247BA0;">💵 美股 {us_pct:.1f}%</div>'
+        '</div>'
+    )
+    st.markdown(bar_css + alloc_html, unsafe_allow_html=True)
+
+    st.divider()
+
     # ── 目標達成計算器 ──
     st.subheader("🎯 目標達成計算器")
     TARGET = 20_000_000  # 2000 萬
-
     fc_total_now = port["fc_total_twd"]
     gap = TARGET - fc_total_now
     gap_pct = (TARGET / fc_total_now - 1) * 100 if fc_total_now > 0 else 0
+    goal_prog = max(0.0, min(fc_total_now / TARGET, 1.0))
 
-    col_t1, col_t2 = st.columns(2)
-    col_t1.metric("目標資產", f"NT$ {TARGET/10000:,.0f} 萬")
-    col_t2.metric("目前資產", f"NT$ {fc_total_now/10000:,.1f} 萬")
+    hero_html = (
+        '<div style="text-align:center; margin:10px 0;">'
+        f'<div style="font-size:13px; color:#888;">目前資產 / 目標 NT$ {TARGET/10000:,.0f} 萬</div>'
+        f'<div style="font-size:40px; font-weight:800;">NT$ {fc_total_now/10000:,.1f} 萬</div>'
+        '</div>'
+        f'<div style="width:100%; height:14px; background:#eee; border-radius:8px; overflow:hidden;">'
+        f'<div style="width:{goal_prog*100:.1f}%; height:14px; background:#2EC4B6;"></div></div>'
+        f'<div style="text-align:center; font-size:13px; color:#888; margin-top:4px;">{goal_prog*100:.1f}% 達成</div>'
+    )
+    st.markdown(hero_html, unsafe_allow_html=True)
 
     if gap > 0:
         st.error(f"📉 距離目標還差 **NT$ {gap/10000:,.1f} 萬**（**{gap_pct:.1f}%**）")
     else:
         st.success(f"🎉 已超越目標！超出 NT$ {abs(gap)/10000:,.1f} 萬")
 
-    # 各報酬率需要幾次複利
-    rows_target = []
+    # 各報酬率需要幾次複利（卡片式，取代寬表格）
+    import math
+    rate_css = (
+        '<style>'
+        '.rate-grid{display:flex; flex-wrap:wrap;}'
+        '.rate-box{width:33.33%; box-sizing:border-box; text-align:center; padding:8px 2px;}'
+        '.rate-label{font-size:12px; color:#888;}'
+        '.rate-value{font-size:17px; font-weight:700;}'
+        '.rate-sub{font-size:11px; color:#999;}'
+        '</style>'
+    )
+    rate_html = '<div class="rate-grid">'
     for r in [2, 3, 4, 5, 6, 7]:
         if fc_total_now <= 0 or fc_total_now >= TARGET:
             n = 0
         else:
-            import math
             n = math.ceil(math.log(TARGET / fc_total_now) / math.log(1 + r / 100))
         total_after = fc_total_now * ((1 + r / 100) ** n)
-        rows_target.append({
-            "每次漲幅": f"+{r}%",
-            "需要幾次": f"{n} 次",
-            "複利後資產 (萬)": f"{total_after/10000:,.1f}",
-        })
-
-    st.dataframe(pd.DataFrame(rows_target), use_container_width=True, hide_index=True)
+        rate_html += (
+            '<div class="rate-box">'
+            f'<div class="rate-label">每次 +{r}%</div>'
+            f'<div class="rate-value">{n} 次</div>'
+            f'<div class="rate-sub">{total_after/10000:,.0f} 萬</div>'
+            '</div>'
+        )
+    rate_html += '</div>'
+    st.markdown(rate_css + rate_html, unsafe_allow_html=True)
 
 
     fc_tw    = port["fc_tw_twd"]
@@ -1278,52 +1312,46 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
     pct_us   = port["pct_us"]
     pct_tot  = port["pct_total"]
 
-    st.markdown(f"""
-| 戰區 | 曝險金額  | 淨資產 | 獨立曝險度 |
-| :--- | :--- | :--- | :--- |
-| 💰 台股 | NT$ {exp_tw/10000:,.0f} 萬 | NT$ {fc_tw/10000:,.0f} 萬 | **{pct_tw:.1f}%** |
-| 💵 美股 | NT\$ {exp_us/10000:,.0f} 萬<br/><span style="font-size: 0.85em; color: gray;"> {port['exp_us_usd']:,.0f} | NT\$ {fc_us/10000:,.0f} 萬<br/><span style="font-size: 0.85em; color: gray;">  {port['fc_us_usd']:,.0f} | **{pct_us:.1f}%** |
-| 🔥 綜合 | **NT$ {exp_tot/10000:,.0f} 萬** | **NT$ {fc_total/10000:,.0f} 萬** | **{pct_tot:.1f}%** |
-""", unsafe_allow_html=True)
+# ── 戰區曝險卡片（取代寬表格，避免欄位被裁切） ──
+    zone_css = (
+        '<style>'
+        '.zone-card{border-radius:12px; padding:12px 16px; margin-bottom:10px; '
+        'background:#f7f7f8; display:flex; justify-content:space-between; align-items:center;}'
+        '.zone-name{font-size:15px; font-weight:700;}'
+        '.zone-stats{font-size:12px; color:#888; margin-top:2px;}'
+        '.zone-pct{font-size:22px; font-weight:800;}'
+        '</style>'
+    )
+    def zone_card(emoji, name, exp_val, fc_val, pct, sub=""):
+        color = "#E71D36" if pct >= 150 else ("#FF9F1C" if pct >= 100 else "#2EC4B6")
+        return (
+            '<div class="zone-card">'
+            '<div>'
+            f'<div class="zone-name">{emoji} {name}</div>'
+            f'<div class="zone-stats">曝險 NT$ {exp_val/10000:,.0f} 萬 ／ 淨資產 NT$ {fc_val/10000:,.0f} 萬{sub}</div>'
+            '</div>'
+            f'<div class="zone-pct" style="color:{color};">{pct:.1f}%</div>'
+            '</div>'
+        )
 
-        # ── 自動偵測：剛剛動了情境A還是情境B，不用按鈕，看誰的值剛改變 ──
-    cur_hc_years   = st.session_state.get("lc_hc_years", hc_years_default)
-    cur_target_wan = st.session_state.get("lc_target_wan", int(target_monthly_default // 10_000))
-
-    prev_hc_years   = st.session_state.get("_prev_hc_years", cur_hc_years)
-    prev_target_wan = st.session_state.get("_prev_target_wan", cur_target_wan)
-
-    if cur_hc_years != prev_hc_years:
-        st.session_state["lc_basis"] = "A"
-    elif cur_target_wan != prev_target_wan:
-        st.session_state["lc_basis"] = "B"
-    basis = st.session_state.get("lc_basis", "A")
-
-    st.session_state["_prev_hc_years"]   = cur_hc_years
-    st.session_state["_prev_target_wan"] = cur_target_wan
-
-    # 情境B反推年限：在這裡先算好（每次都重算，不會慢半拍）
-    found_y, final_f, final_m = None, 0, 0
-    tf = fc_total
-    for y in range(1, 41):
-        tf = tf * 1.08 + base_m * 12
-        req = (cur_target_wan * 10_000) * ((1 + inflation_rate) ** y)
-        if tf >= (req * 12) / withdrawal_rate:
-            found_y, final_f, final_m = y, tf, req
-            break
-
-    effective_years = cur_hc_years if basis == "A" else (found_y or hc_years_default)
-    note = "" if (basis != "B" or found_y) else "（40年內未達標，暫用預設年限）"
-    st.caption(f"🎛️ 依「{'情境A' if basis == 'A' else '情境B'}」最近的調整，套用 {effective_years} 年{note}")
-
-    # 目標曝險度
-    W = fc_total + base_m * 12 * effective_years
-    target_exp_val = W * (target_k / 100)
-    target_exp_pct = (target_exp_val / fc_total * 100) if fc_total > 0 else 0
-
-    ct, ca = st.columns(2)
-    ct.metric("🎯 綜合目標曝險度", f"{target_exp_pct:.1f}%")
-    ca.metric("🔥 綜合實際曝險度", f"{pct_tot:.1f}%", f"差距: {pct_tot - target_exp_pct:+.1f}%")
+    zone_html = (
+        zone_card("💰", "台股", exp_tw, fc_tw, pct_tw) +
+        zone_card("💵", "美股", exp_us, fc_us, pct_us, f"（${port['exp_us_usd']:,.0f} / ${port['fc_us_usd']:,.0f}）") +
+        zone_card("🔥", "綜合", exp_tot, fc_total, pct_tot)
+    )
+    st.markdown(zone_css + zone_html, unsafe_allow_html=True)
+# ── 目標 vs 實際曝險度：左右並排大數字 ──
+    diff_color = "#E71D36" if (pct_tot - target_exp_pct) > 0 else "#2EC4B6"
+    compare_html = (
+        '<div style="display:flex; justify-content:space-around; text-align:center; margin:12px 0;">'
+        '<div><div style="font-size:13px; color:#888;">🎯 綜合目標曝險度</div>'
+        f'<div style="font-size:30px; font-weight:800;">{target_exp_pct:.1f}%</div></div>'
+        '<div><div style="font-size:13px; color:#888;">🔥 綜合實際曝險度</div>'
+        f'<div style="font-size:30px; font-weight:800; color:{diff_color};">{pct_tot:.1f}%</div>'
+        f'<div style="font-size:13px; color:{diff_color};">差距 {pct_tot - target_exp_pct:+.1f}%</div></div>'
+        '</div>'
+    )
+    st.markdown(compare_html, unsafe_allow_html=True)
 
     st.subheader("⚖️ 應該如何平衡？")
     diff = exp_tot - target_exp_val
