@@ -1230,7 +1230,7 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
     tw_pct  = val_tw / total_p * 100 if total_p > 0 else 0
     us_pct  = val_us / total_p * 100 if total_p > 0 else 0
 
-# ── 台股/美股佔比：橫向比例條 ──
+    # ── 台股/美股佔比：橫向比例條 ──
     bar_css = (
         '<style>'
         '.alloc-bar{display:flex; width:100%; height:34px; border-radius:8px; '
@@ -1312,7 +1312,7 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
     pct_us   = port["pct_us"]
     pct_tot  = port["pct_total"]
 
-# ── 戰區曝險卡片（取代寬表格，避免欄位被裁切） ──
+    # ── 戰區曝險卡片（取代寬表格，避免欄位被裁切） ──
     zone_css = (
         '<style>'
         '.zone-card{border-radius:12px; padding:12px 16px; margin-bottom:10px; '
