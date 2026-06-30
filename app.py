@@ -573,20 +573,54 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
     daily_pct = (p_tw_curr / p_tw_yest - 1) * 100 if p_tw_yest > 0 else 0
 
     # --- 基本指標列 ---
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("市值",       f"{val/10000:,.0f} 萬")
-    c2.metric("成本",       f"{cost/10000:,.0f} 萬")
-    c3.metric("未實現損益", f"{(val-cost)/10000:+,.0f} 萬", f"{roi*100:+.1f}%")
-    c4.metric("今日損益",   f"{port['daily_pnl_twd']:+,.0f}", f"{daily_pct:+.2f}%")
-    c5.metric("曝險度",     f"{port['pct_tw']:.1f}%")
+# --- Hero：現價 + 今日漲跌 ---
+    pnl_color = "#2EC4B6" if (val - cost) >= 0 else "#E71D36"
+    today_color = "#2EC4B6" if daily_pct >= 0 else "#E71D36"
+    today_arrow = "↑" if daily_pct >= 0 else "↓"
 
-    c6, c7, c8, c9, c10 = st.columns(5)
-    c6.metric("庫存張數",   f"{shares/1000:,.0f} 張")
-    c7.metric("均價",       f"{cost/shares:.2f}" if shares > 0 else "0")
-    c8.metric("昨日收盤",   f"{p_tw_yest:.2f}")
-    c9.metric("目前現價",   f"{p_tw_curr:.2f}")
-    c10.metric("年化報酬",  f"{ann_roi:+.2f}%")
+    hero_html = (
+        '<div style="text-align:center; margin-bottom:14px;">'
+        '<div style="font-size:14px; color:#888;">00631L 現價</div>'
+        f'<div style="font-size:48px; font-weight:800; line-height:1.1;">{p_tw_curr:.2f}</div>'
+        f'<div style="display:inline-block; padding:4px 12px; border-radius:14px; '
+        f'background:{today_color}22; color:{today_color}; font-size:15px; font-weight:600;">'
+        f'{today_arrow} {abs(daily_pct):.2f}%（{port["daily_pnl_twd"]:+,.0f}）</div>'
+        '</div>'
+    )
+    st.markdown(hero_html, unsafe_allow_html=True)
 
+    # --- 3x3 指標網格 ---
+    grid_css = (
+        '<style>'
+        '.tw-grid{display:flex; flex-wrap:wrap; text-align:center;}'
+        '.tw-box{width:33.33%; padding:10px 4px; box-sizing:border-box;}'
+        '.tw-label{font-size:12px; color:#888; margin-bottom:3px;}'
+        '.tw-value{font-size:19px; font-weight:700;}'
+        '.tw-sub{font-size:12px; color:#999; margin-top:1px;}'
+        '</style>'
+    )
+
+    def box(label, value, sub="", color="inherit"):
+        return (
+            '<div class="tw-box">'
+            f'<div class="tw-label">{label}</div>'
+            f'<div class="tw-value" style="color:{color};">{value}</div>'
+            f'<div class="tw-sub">{sub}</div>'
+            '</div>'
+        )
+
+    grid_html = '<div class="tw-grid">' + (
+        box("市值", f"{val/10000:,.0f} 萬") +
+        box("成本", f"{cost/10000:,.0f} 萬") +
+        box("未實現損益", f"{(val-cost)/10000:+,.0f} 萬", f"{roi*100:+.1f}%", pnl_color) +
+        box("今日損益", f"{port['daily_pnl_twd']:+,.0f}", f"{daily_pct:+.2f}%", today_color) +
+        box("曝險度", f"{port['pct_tw']:.1f}%") +
+        box("年化報酬", f"{ann_roi:+.2f}%", color=("#2EC4B6" if ann_roi >= 0 else "#E71D36")) +
+        box("庫存張數", f"{shares/1000:,.0f} 張") +
+        box("均價", f"{cost/shares:.2f}" if shares > 0 else "0") +
+        box("昨日收盤", f"{p_tw_yest:.2f}")
+    ) + '</div>'
+    st.markdown(grid_css + grid_html, unsafe_allow_html=True)
     st.divider()
 
     # ── 投資階段儀表板 ──
