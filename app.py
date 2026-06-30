@@ -612,7 +612,7 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
 
     with pc1:
         if multiple < 20:
-            delta_text = f"👈 當前階段 (差 {20 - multiple:.1f}x)"
+            delta_text = f"👈 當前階段 (距下階段 {20 - multiple:.1f}x)"
         else:
             delta_text = f"✅ 已通關 (超標 {multiple - 20:.1f}x)"
         st.metric("🌱 累積期 / 20x", f"{min(multiple, 20):.1f}x", delta_text)
@@ -621,14 +621,14 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
         if multiple < 20:
             delta_text = f"⏳ 未開啟 (距門檻差 {20 - multiple:.1f}x)"
         elif multiple < 50:
-            delta_text = f"👈 當前階段 (距下階段差 {50 - multiple:.1f}x)"
+            delta_text = f"👈 當前階段 (距下階段 {50 - multiple:.1f}x)"
         else:
             delta_text = f"✅ 已通關 (超標 {multiple - 50:.1f}x)"
         st.metric("🛬 滑行期 / 50x", f"{min(multiple, 50):.1f}x", delta_text)    
 
     with pc3:
         if multiple < 50:
-            delta_text = f"⏳ 未達標 (差 {50 - multiple:.1f}x)"
+            delta_text = f"⏳ 未達標 (距門檻差 {50 - multiple:.1f}x)"
         else:
             delta_text = f"🎉 自由階段 (超標 {multiple - 50:.1f}x)"
         st.metric("🏖️ 自由期 / 50x+", f"{multiple:.1f}x", delta_text)
