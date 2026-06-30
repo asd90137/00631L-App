@@ -1193,32 +1193,7 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
                          target_monthly_default: float, inflation_rate: float, withdrawal_rate: float,
                          usd_twd: float, phase_info: dict = None):
     """Tab 3 生命周期 & 退休"""
-    # ── 投資階段進度條 ──
-    if phase_info:
-        ph = phase_info
-        multiple = ph.get("current_multiple", 0.0)
-        
-        # 動態判斷當前階段與文案
-        if multiple < 20:
-            stage_name = "🌱 當前階段：累積期"
-            status_text = f"🎯 距離滑行期 (20x) 還差 **{20 - multiple:.1f}x**"
-        elif multiple < 50:
-            stage_name = "🛬 當前階段：滑行期"
-            status_text = f"✅ 已超越累積期 **{multiple - 20:.1f}x** ｜ 🎯 距自由期 (50x) 還差 **{50 - multiple:.1f}x**"
-        else:
-            stage_name = "🏖️ 當前階段：自由期"
-            status_text = f"🎉 已完全通關！超越自由期門檻 **{multiple - 50:.1f}x**"
-            
-        st.metric(stage_name, f"{multiple:.1f}x")
-        st.markdown(f"*{status_text}*")
 
-        prog = min(multiple / 50, 1.0)
-        st.progress(prog)
-        st.caption(
-            f"整體進度 **{multiple:.1f}x / 50x**（{prog*100:.0f}%）｜"
-            f"現金目標比 **{ph.get('cash_lo',0):.0f}%～{ph.get('cash_hi',0):.0f}%**"
-        )
-        st.divider()
 
 
 
