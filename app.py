@@ -1062,7 +1062,7 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
         
         with lc1:
             if multiple < 20:
-                delta_text = f"👈 當前階段 (差 {20 - multiple:.1f}x)"
+                delta_text = f"👈 當前階段 (距下階段 {20 - multiple:.1f}x)"
             else:
                 delta_text = f"✅ 已通關 (超標 {multiple - 20:.1f}x)"
             lc1.metric("🌱 累積期 / 20x", f"{min(multiple, 20):.1f}x", delta_text)
@@ -1071,7 +1071,7 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
             if multiple < 20:
                 delta_text = f"⏳ 未開啟 (距門檻差 {20 - multiple:.1f}x)"
             elif multiple < 50:
-                delta_text = f"👈 當前階段 (距下階段差 {50 - multiple:.1f}x)"
+                delta_text = f"👈 當前階段 (距下階段 {50 - multiple:.1f}x)"
             else:
                 delta_text = f"✅ 已通關 (超標 {multiple - 50:.1f}x)"
             lc2.metric("🛬 滑行期 / 50x", f"{min(multiple, 50):.1f}x", delta_text)
