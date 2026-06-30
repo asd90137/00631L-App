@@ -927,37 +927,57 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
     add_dist = (add / curr - 1) * 100 if curr > 0 and add > 0 else 0
     est_profit = (tp - avg) * g["total_shares"] if avg > 0 else 0
 
-    # 1. 動態狀態判斷與文案
+    # 1. 動態狀態判斷與文案（注意：$ 一律用 \$ 跳脫，避免 st.markdown 誤判成 LaTeX）
     if curr >= tp and tp > 0:
         stage_name = f"🎉 狀態：達標停利 (第 {g['tranche_no']} 份)"
-        status_text = f"💰 預估獲利入袋 +${est_profit:,.0f}"
+        status_text = f"💰 預估獲利入袋 +\\${est_profit:,.0f}"
     elif curr >= avg:
         stage_name = f"📈 狀態：獲利向上 (第 {g['tranche_no']} 份)"
-        status_text = f"🎯 距停利 (${tp:.2f}) 還差 ${tp - curr:.2f}"
+        status_text = f"🎯 距停利 (\\${tp:.2f}) 還差 \\${tp - curr:.2f}"
     elif curr > add and add > 0:
         stage_name = f"📉 狀態：蓄水向下 (第 {g['tranche_no']} 份)"
-        status_text = f"⏳ 距加碼 (${add:.2f}) 還差 ${curr - add:.2f}"
+        status_text = f"⏳ 距加碼 (\\${add:.2f}) 還差 \\${curr - add:.2f}"
     elif add > 0:
         stage_name = f"🎯 狀態：觸發加碼 (第 {g['tranche_no']} 份)"
         status_text = f"🛒 準備買進 {g['next_add_shares']:,.0f} 股"
     else:
         stage_name = f"🔒 狀態：已滿倉 (第 {g['tranche_no']} 份)"
-        status_text = f"🎯 距停利 (${tp:.2f}) 還差 ${tp - curr:.2f}"
+        status_text = f"🎯 距停利 (\\${tp:.2f}) 還差 \\${tp - curr:.2f}"
 
     # 2. 顯示主大字：目前股價與狀態
     st.metric(stage_name, f"${curr:.2f}", f"{soxl_daily_pct:+.2f}%")
     st.markdown(status_text)
 
-    # 3. 網格進度條（左：加碼 ／ 中：均價 ／ 右：停利）
+    # 3. 網格進度條（含均價位置標記）
     if tp > 0:
         range_min = add if add > 0 else (avg * 0.7)
         total_range = tp - range_min
         prog = max(0.0, min((curr - range_min) / total_range, 1.0)) if total_range > 0 else 1.0
+        avg_pos = (max(0.0, min((avg - range_min) / total_range, 1.0))
+                   if total_range > 0 and avg > 0 else None)
 
-        st.progress(prog)
+        marker_html = ""
+        if avg_pos is not None:
+            marker_html = f"""
+            <div style="position:absolute; left:{avg_pos*100:.1f}%; top:-5px;
+                        width:2px; height:20px; background:#FF9F1C; z-index:2;"></div>
+            <div style="position:absolute; left:{avg_pos*100:.1f}%; top:18px;
+                        transform:translateX(-50%); font-size:11px; color:#FF9F1C;
+                        white-space:nowrap; z-index:2;">成本 ${avg:.2f}</div>
+            """
+
+        st.markdown(f"""
+        <div style="position:relative; width:100%; height:10px; background:#e6e6e6;
+                    border-radius:6px; margin-top:10px; margin-bottom:34px;">
+            <div style="position:absolute; left:0; top:0; height:10px;
+                        width:{prog*100:.1f}%; background:#2EC4B6; border-radius:6px; z-index:1;"></div>
+            {marker_html}
+        </div>
+        """, unsafe_allow_html=True)
 
         add_str = f"${add:.2f}" if add > 0 else "已滿倉"
         add_sub = f"({add_dist:+.1f}%)" if add > 0 else ""
+        add_shares_str = f"買 {g['next_add_shares']:,.0f} 股" if add > 0 else ""
         tp_str  = f"${tp:.2f}"
         tp_sub  = f"(+{tp_dist:.1f}%)"
 
@@ -976,6 +996,7 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
                 <div class="grid-label">🎯 加碼</div>
                 <div class="grid-value" style="color:#2EC4B6;">{add_str}</div>
                 <div class="grid-sub">{add_sub}</div>
+                <div class="grid-sub">{add_shares_str}</div>
             </div>
             <div class="grid-box mid">
                 <div class="grid-label">📦 均價（持倉 {g['total_shares']:,.0f} 股）</div>
