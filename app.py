@@ -948,7 +948,7 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
     st.metric(stage_name, f"${curr:.2f}", f"{soxl_daily_pct:+.2f}%")
     st.markdown(status_text)
 
-    # 3. 網格進度條（含均價位置標記）
+# 3. 網格進度條（含均價位置標記）
     if tp > 0:
         range_min = add if add > 0 else (avg * 0.7)
         total_range = tp - range_min
@@ -958,22 +958,23 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
 
         marker_html = ""
         if avg_pos is not None:
-            marker_html = f"""
-            <div style="position:absolute; left:{avg_pos*100:.1f}%; top:-5px;
-                        width:2px; height:20px; background:#FF9F1C; z-index:2;"></div>
-            <div style="position:absolute; left:{avg_pos*100:.1f}%; top:18px;
-                        transform:translateX(-50%); font-size:11px; color:#FF9F1C;
-                        white-space:nowrap; z-index:2;">成本 ${avg:.2f}</div>
-            """
+            marker_html = (
+                f'<div style="position:absolute; left:{avg_pos*100:.1f}%; top:-5px; '
+                f'width:2px; height:20px; background:#FF9F1C; z-index:2;"></div>'
+                f'<div style="position:absolute; left:{avg_pos*100:.1f}%; top:18px; '
+                f'transform:translateX(-50%); font-size:11px; color:#FF9F1C; '
+                f'white-space:nowrap; z-index:2;">成本 \\${avg:.2f}</div>'
+            )
 
-        st.markdown(f"""
-        <div style="position:relative; width:100%; height:10px; background:#e6e6e6;
-                    border-radius:6px; margin-top:10px; margin-bottom:34px;">
-            <div style="position:absolute; left:0; top:0; height:10px;
-                        width:{prog*100:.1f}%; background:#2EC4B6; border-radius:6px; z-index:1;"></div>
-            {marker_html}
-        </div>
-        """, unsafe_allow_html=True)
+        bar_html = (
+            '<div style="position:relative; width:100%; height:10px; background:#e6e6e6; '
+            'border-radius:6px; margin-top:10px; margin-bottom:34px;">'
+            f'<div style="position:absolute; left:0; top:0; height:10px; '
+            f'width:{prog*100:.1f}%; background:#2EC4B6; border-radius:6px; z-index:1;"></div>'
+            f'{marker_html}'
+            '</div>'
+        )
+        st.markdown(bar_html, unsafe_allow_html=True)
 
         add_str = f"${add:.2f}" if add > 0 else "已滿倉"
         add_sub = f"({add_dist:+.1f}%)" if add > 0 else ""
@@ -981,35 +982,38 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
         tp_str  = f"${tp:.2f}"
         tp_sub  = f"(+{tp_dist:.1f}%)"
 
-        st.markdown(f"""
-        <style>
-        .grid-row {{ display:flex; justify-content:space-between; margin-top:4px; }}
-        .grid-box {{ flex:1; }}
-        .grid-box.mid {{ text-align:center; }}
-        .grid-box.right {{ text-align:right; }}
-        .grid-label {{ font-size:13px; color:#888; margin-bottom:2px; }}
-        .grid-value {{ font-size:20px; font-weight:700; }}
-        .grid-sub {{ font-size:13px; color:#999; }}
-        </style>
-        <div class="grid-row">
-            <div class="grid-box">
-                <div class="grid-label">🎯 加碼</div>
-                <div class="grid-value" style="color:#2EC4B6;">{add_str}</div>
-                <div class="grid-sub">{add_sub}</div>
-                <div class="grid-sub">{add_shares_str}</div>
-            </div>
-            <div class="grid-box mid">
-                <div class="grid-label">📦 均價（持倉 {g['total_shares']:,.0f} 股）</div>
-                <div class="grid-value">${avg:.2f}</div>
-                <div class="grid-sub">報酬 {cur_roi:+.1f}%</div>
-            </div>
-            <div class="grid-box right">
-                <div class="grid-label">🏆 停利</div>
-                <div class="grid-value" style="color:#E71D36;">{tp_str}</div>
-                <div class="grid-sub">{tp_sub}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        grid_css = (
+            '<style>'
+            '.grid-row{display:flex;justify-content:space-between;margin-top:4px;}'
+            '.grid-box{flex:1;}'
+            '.grid-box.mid{text-align:center;}'
+            '.grid-box.right{text-align:right;}'
+            '.grid-label{font-size:13px;color:#888;margin-bottom:2px;}'
+            '.grid-value{font-size:20px;font-weight:700;}'
+            '.grid-sub{font-size:13px;color:#999;}'
+            '</style>'
+        )
+        grid_html = (
+            '<div class="grid-row">'
+            '<div class="grid-box">'
+            '<div class="grid-label">🎯 加碼</div>'
+            f'<div class="grid-value" style="color:#2EC4B6;">{add_str}</div>'
+            f'<div class="grid-sub">{add_sub}</div>'
+            f'<div class="grid-sub">{add_shares_str}</div>'
+            '</div>'
+            '<div class="grid-box mid">'
+            f'<div class="grid-label">📦 均價（持倉 {g["total_shares"]:,.0f} 股）</div>'
+            f'<div class="grid-value">${avg:.2f}</div>'
+            f'<div class="grid-sub">報酬 {cur_roi:+.1f}%</div>'
+            '</div>'
+            '<div class="grid-box right">'
+            '<div class="grid-label">🏆 停利</div>'
+            f'<div class="grid-value" style="color:#E71D36;">{tp_str}</div>'
+            f'<div class="grid-sub">{tp_sub}</div>'
+            '</div>'
+            '</div>'
+        )
+        st.markdown(grid_css + grid_html, unsafe_allow_html=True)
 
     st.divider()
 
