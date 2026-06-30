@@ -1078,7 +1078,7 @@ def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, targe
 
         with lc3:
             if multiple < 50:
-                delta_text = f"⏳ 未達標 (差 {50 - multiple:.1f}x)"
+                delta_text = f"⏳ 未達標 (距門檻差 {50 - multiple:.1f}x)"
             else:
                 delta_text = f"🎉 自由階段 (超標 {multiple - 50:.1f}x)"
             lc3.metric("🏖️ 自由期 / 50x+", f"{multiple:.1f}x", delta_text)
