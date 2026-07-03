@@ -834,30 +834,30 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
 
     st.markdown(card_css + card1 + card2, unsafe_allow_html=True)
 
-    # 今日最終行動指示
-    st.markdown("#### 🚀 今日最終行動指示")
+    # 今日最終行動指示（精簡版，詳細現金缺口已在上方卡片顯示）
     if status != "鎖定扣款中":
-        if target_cr < 1.0:
-            shortfall = (target_cr * port["fc_total_twd"] - cash_twd) / (1 - target_cr)
-        else:
-            shortfall = 0
-        st.warning(
-            f"現金比 **{current_cr*100:.1f}%** 低於目標 **{target_cr*100:.1f}%**\n\n"
-            f"🔴 停扣蓄水中，持續存入薪資 (約缺 **NT$ {max(0, shortfall):,.0f}**)，現金比達標後系統自動解鎖"
-        )
+        action_bg, action_color, action_msg = "#E71D3614", "#E71D36", "🔴 停扣蓄水中，靜待現金到位"
     elif final_amt > 0:
-        st.success(f"**{action_label}**")
-        action_html = (
-            '<div style="display:flex; justify-content:space-around; text-align:center; margin-top:6px;">'
-            '<div><div style="font-size:13px; color:#888;">建議投入本金</div>'
-            f'<div style="font-size:24px; font-weight:800; color:#2EC4B6;">NT$ {final_amt:,.0f}</div></div>'
-            '<div><div style="font-size:13px; color:#888;">換算購買股數</div>'
-            f'<div style="font-size:24px; font-weight:800;">{(final_amt / p_tw_curr):,.0f} 股</div></div>'
+        action_bg, action_color, action_msg = "#2EC4B614", "#2EC4B6", action_label
+    else:
+        action_bg, action_color, action_msg = "#88888814", "#888", "☕ 靜待機會，今日無需行動"
+
+    action_head_html = (
+        f'<div style="background:{action_bg}; border:1px solid {action_color}33; '
+        f'border-radius:12px; padding:12px 16px; margin-top:8px;">'
+        f'<div style="font-size:15px; font-weight:700; color:{action_color};">🚀 {action_msg}</div>'
+    )
+    if status == "鎖定扣款中" and final_amt > 0:
+        action_head_html += (
+            '<div style="display:flex; justify-content:space-around; text-align:center; margin-top:10px;">'
+            '<div><div style="font-size:12px; color:#888;">建議投入本金</div>'
+            f'<div style="font-size:22px; font-weight:800; color:{action_color};">NT$ {final_amt:,.0f}</div></div>'
+            '<div><div style="font-size:12px; color:#888;">換算購買股數</div>'
+            f'<div style="font-size:22px; font-weight:800;">{(final_amt / p_tw_curr):,.0f} 股</div></div>'
             '</div>'
         )
-        st.markdown(action_html, unsafe_allow_html=True)
-    else:
-        st.info("☕ 現金充足，今日非扣款日且無大跌，靜待機會。")
+    action_head_html += '</div>'
+    st.markdown(action_head_html, unsafe_allow_html=True)
 
     st.divider()
 
