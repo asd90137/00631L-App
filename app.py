@@ -703,6 +703,47 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
     st.markdown(overview_css + overview_html, unsafe_allow_html=True)
 
     st.caption(f"現金目標比 **{ph.get('cash_lo', 0):.0f}%～{ph.get('cash_hi', 0):.0f}%**")
+    # ── 現金水位一覽卡片 ──
+    target_cash_amt = target_cr * port["fc_total_twd"]
+    cash_gap = target_cash_amt - cash_twd
+    gap_color = "#E71D36" if cash_gap > 0 else "#2EC4B6"
+    gap_label = f"還缺 NT$ {cash_gap:,.0f}" if cash_gap > 0 else f"已超出 NT$ {abs(cash_gap):,.0f}"
+
+    cash_overview_css = (
+        '<style>'
+        '.cash-card{display:flex; flex-wrap:wrap; background:#f7f7f8; border-radius:14px; '
+        'padding:14px 10px; margin-top:14px;}'
+        '.cash-item{width:50%; text-align:center; padding:8px 4px; box-sizing:border-box;}'
+        '.cash-label{font-size:12px; color:#888; margin-bottom:3px;}'
+        '.cash-value{font-size:20px; font-weight:800;}'
+        '</style>'
+    )
+    cash_overview_html = (
+        '<div class="cash-card">'
+        '<div class="cash-item">'
+        '<div class="cash-label">💰 目前總資產</div>'
+        f'<div class="cash-value">NT$ {port["fc_total_twd"]/10000:,.0f} 萬</div>'
+        '</div>'
+        '<div class="cash-item">'
+        '<div class="cash-label">🎯 目標現金比</div>'
+        f'<div class="cash-value">{target_cr*100:.1f}%</div>'
+        '</div>'
+        '<div class="cash-item">'
+        '<div class="cash-label">💵 目標現金額</div>'
+        f'<div class="cash-value">NT$ {target_cash_amt/10000:,.0f} 萬</div>'
+        '</div>'
+        '<div class="cash-item">'
+        '<div class="cash-label">📊 目前現金</div>'
+        f'<div class="cash-value">NT$ {cash_twd/10000:,.0f} 萬</div>'
+        '</div>'
+        f'<div style="width:100%; text-align:center; margin-top:10px; padding-top:10px; '
+        f'border-top:1px solid #e0e0e0;">'
+        f'<span style="font-size:13px; color:#888;">現金缺口</span> '
+        f'<span style="font-size:22px; font-weight:800; color:{gap_color};">{gap_label}</span>'
+        f'</div>'
+        '</div>'
+    )
+    st.markdown(cash_overview_css + cash_overview_html, unsafe_allow_html=True)
 
 
 
