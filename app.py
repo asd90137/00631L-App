@@ -640,30 +640,70 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
 
     sniper_mult, sniper_label = sniper_signal(daily_pct)
 
-    # ── 階段進度條 ──
+    # ── 階段進度條（依目前所在階段動態計算） ──
     st.subheader("🗺️ 投資階段儀表板")
 
-    # 動態判斷當前階段與文案
+    PHASE_BOUNDS = [(0, 20, "🌱 累積期"), (20, 50, "🛬 滑行期"), (50, 999, "🏖️ 自由期")]
+
     if multiple < 20:
         stage_name = "🌱 當前階段：累積期"
+        lo, hi, _ = PHASE_BOUNDS[0]
+        phase_prog = min((multiple - lo) / (hi - lo), 1.0)
         status_text = f"🎯 距離滑行期 (20x) 還差 **{20 - multiple:.1f}x**"
+        bar_label = f"{multiple:.1f}x / {hi}x（{phase_prog*100:.0f}%）"
+        bar_color = "#2EC4B6"
     elif multiple < 50:
         stage_name = "🛬 當前階段：滑行期"
+        lo, hi, _ = PHASE_BOUNDS[1]
+        phase_prog = min((multiple - lo) / (hi - lo), 1.0)
         status_text = f"✅ 已超越累積期 **{multiple - 20:.1f}x** ｜ 🎯 距自由期 (50x) 還差 **{50 - multiple:.1f}x**"
+        bar_label = f"{multiple:.1f}x（累積期後 {multiple-20:.1f}x）／ {hi-lo}x 區間（{phase_prog*100:.0f}%）"
+        bar_color = "#FF9F1C"
     else:
         stage_name = "🏖️ 當前階段：自由期"
+        phase_prog = 1.0
         status_text = f"🎉 已完全通關！超越自由期門檻 **{multiple - 50:.1f}x**"
+        bar_label = f"{multiple:.1f}x ｜ 已達自由期門檻，持續累積中"
+        bar_color = "#E71D36"
 
-    # 只顯示一個乾淨的大指標
     st.metric(stage_name, f"{multiple:.1f}x")
     st.markdown(f"*{status_text}*")
 
-    overall_prog = min(multiple / 50, 1.0)
-    st.progress(overall_prog)
-    st.caption(
-        f"整體進度 **{multiple:.1f}x / 50x**（{overall_prog*100:.0f}%）｜"
-        f"現金目標比 **{ph.get('cash_lo', 0):.0f}%～{ph.get('cash_hi', 0):.0f}%**"
+    # 當前階段的專屬進度條
+    phase_bar_html = (
+        f'<div style="width:100%; height:14px; background:#eee; border-radius:8px; overflow:hidden; margin-top:6px;">'
+        f'<div style="width:{phase_prog*100:.1f}%; height:14px; background:{bar_color};"></div></div>'
+        f'<div style="font-size:13px; color:#888; margin-top:4px;">{bar_label}</div>'
     )
+    st.markdown(phase_bar_html, unsafe_allow_html=True)
+
+    # 三階段總覽小條（顯示目前落在哪個階段）
+    overview_css = (
+        '<style>'
+        '.stage-overview{display:flex; width:100%; height:8px; border-radius:6px; overflow:hidden; margin-top:14px;}'
+        '.stage-seg{flex:1; margin-right:3px;}'
+        '.stage-seg:last-child{margin-right:0;}'
+        '.stage-tags{display:flex; justify-content:space-between; font-size:11px; color:#aaa; margin-top:3px;}'
+        '</style>'
+    )
+    seg_colors = []
+    for lo, hi, name in PHASE_BOUNDS:
+        if multiple >= (hi if hi < 999 else lo + 1e9):
+            seg_colors.append("#2EC4B6")   # 已完全通過的階段
+        elif multiple > lo:
+            seg_colors.append("#FF9F1C")   # 目前所在階段
+        else:
+            seg_colors.append("#e0e0e0")   # 尚未到達
+    overview_html = (
+        '<div class="stage-overview">'
+        + "".join(f'<div class="stage-seg" style="background:{c};"></div>' for c in seg_colors)
+        + '</div>'
+        '<div class="stage-tags"><span>🌱 累積期</span><span>🛬 滑行期</span><span>🏖️ 自由期</span></div>'
+    )
+    st.markdown(overview_css + overview_html, unsafe_allow_html=True)
+
+    st.caption(f"現金目標比 **{ph.get('cash_lo', 0):.0f}%～{ph.get('cash_hi', 0):.0f}%**")
+
 
 
 
