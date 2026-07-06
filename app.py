@@ -704,7 +704,7 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
 
     st.caption(f"現金目標比 **{ph.get('cash_lo', 0):.0f}%～{ph.get('cash_hi', 0):.0f}%**")
     # ── 現金水位一覽卡片 ──
-    target_cash_amt = target_cr * port["fc_total_twd"]
+    target_cash_amt = target_cr * port["fc_tw_twd"]
     cash_gap = target_cash_amt - cash_twd
     gap_color = "#E71D36" if cash_gap > 0 else "#2EC4B6"
     gap_label = f"還缺 NT$ {cash_gap:,.0f}" if cash_gap > 0 else f"已超出 NT$ {abs(cash_gap):,.0f}"
@@ -722,7 +722,7 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
         '<div class="cash-card">'
         '<div class="cash-item">'
         '<div class="cash-label">💰 目前總資產</div>'
-        f'<div class="cash-value">NT$ {port["fc_total_twd"]/10000:,.0f} 萬</div>'
+        f'<div class="cash-value">NT$ {port["fc_tw_twd"]/10000:,.0f} 萬</div>'
         '</div>'
         '<div class="cash-item">'
         '<div class="cash-label">🎯 目標現金比</div>'
@@ -752,7 +752,7 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
     if birthday:
         if today_d.month == birthday.month and today_d.day == birthday.day:
             if current_cr < target_cr * 0.8:
-                gap = target_cr * port["fc_total_twd"] - cash_twd
+                gap = target_cr * port["fc_tw_twd"] - cash_twd
                 shares_to_sell = gap / p_tw_curr if p_tw_curr > 0 else 0
                 st.error(
                     f"🎂 **生日再平衡警報！** "
@@ -872,21 +872,27 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
             x=["00631L 市值", "可用現金", "信貸總餘額", "台股獨立淨資產"],
             measure=["relative", "relative", "relative", "total"],
             y=[val, cash_twd, loan_total, net],
-            textposition="inside",
+            textposition="outside",  # 改到柱子外部更清爽
             texttemplate="NT$ %{y:,.0f}",
-            textfont=dict(color="black", size=13),
-            increasing={"marker": {"color": "#2EC4B6"}},
-            decreasing={"marker": {"color": "#E71D36"}},
-            totals={"marker": {"color": "#FF9F1C"}},
-            connector={"line": {"color": "#5C5C5C", "width": 1, "dash": "dot"}},
+            textfont=dict(size=14),
+            increasing={"marker": {"color": "#10B981"}},  # 現代翡翠綠
+            decreasing={"marker": {"color": "#EF4444"}},  # 現代警戒紅
+            totals={"marker": {"color": "#3B82F6"}},      # 現代科技藍
+            connector={"visible": False},                 # 移除突兀的連接虛線
         ))
-        fig.update_layout(height=380, margin=dict(l=10, r=10, t=40, b=10),
-                          showlegend=False, yaxis=dict(title="金額 (NT$)"))
+        fig.update_layout(
+            height=380, margin=dict(l=10, r=10, t=40, b=10),
+            showlegend=False, 
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", # 透明背景
+            yaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.2)", zeroline=False, title="金額 (NT$)"),
+            xaxis=dict(showgrid=False, zeroline=False)
+        )
         st.plotly_chart(fig, use_container_width=True)
     with col_d:
         st.info(f"💡 **台股獨立淨資產**\n\nNT$ {port['fc_tw_twd']/10000:,.1f} 萬\n\n*台股市值 + 台幣現金 − 總信貸*")
 
     # --- 逐筆戰績 ---
+
     with st.expander(f"📜 逐筆投資戰績表 (目前現價: {p_tw_curr:.2f})", expanded=False):
         buy_df = tw_trade.get("raw_buys", pd.DataFrame())
         if not buy_df.empty:
@@ -920,16 +926,13 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
 
 
 def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
-    """台股三張戰術圖表"""
+    """台股三張戰術圖表 (現代化 UI 升級版)"""
     try:
         hist = yf.download(CONFIG.TICKER_TW_YF, period="5y", progress=False)
         raw_close = (hist["Close"][CONFIG.TICKER_TW_YF]
                      if isinstance(hist.columns, pd.MultiIndex) else hist["Close"])
 
-        # yfinance 的 Close 欄已是 adjusted price（股票分割前的舊價格會自動縮小還原），
-        # 不需要再手動除以 SPLIT_RATIO，直接使用即可。
         adj = raw_close.copy()
-
         min_date = tw_trade["min_date"]
         start    = min_date if pd.notnull(min_date) else pd.to_datetime("2024-01-01")
         rp       = adj[adj.index >= start]
@@ -937,69 +940,99 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
         if rp.dropna().empty:
             return
 
-        # 帳本已全面使用分割後尺度（低股價 + 多股數），yfinance adjusted close 也是同一尺度，直接相除即可。
         avg_cost = tw_trade["cost"] / tw_trade["shares"] if tw_trade["shares"] > 0 else 0
+        
+        # 共同佈局設定 (無邊框、半透明網格、統一懸浮提示)
+        modern_layout = dict(
+            plot_bgcolor="rgba(0,0,0,0)", 
+            paper_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=10, r=40, t=30, b=10), # 右側留空間給最新標籤
+            hovermode="x unified",
+            xaxis=dict(showgrid=False, zeroline=False),
+            yaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.2)", zeroline=False)
+        )
 
-        # A. 價格走勢
+        # ── A. 價格走勢 ──
         st.write("📈 **A. 價格走勢與還原均價**")
         fig1 = go.Figure()
-        fig1.add_trace(go.Scatter(x=rp.index, y=rp.values, name="還原價", line=dict(color="#E71D36")))
+        
+        # 使用填色面積圖 (Area Chart) 取代醜陋的背景色塊
+        fig1.add_trace(go.Scatter(
+            x=rp.index, y=rp.values, name="還原價", 
+            line=dict(color="#FF4B4B", width=2),
+            fill='tozeroy', fillcolor='rgba(255, 75, 75, 0.08)' # 底部極淡的紅色漸層
+        ))
+        
         mx, mi, lt = rp.max(), rp.min(), rp.dropna().iloc[-1]
+        
         if avg_cost > 0:
-            fig1.add_hline(y=avg_cost, line_dash="dash", line_color="#00A86B",
-                           annotation_text=f"🟢 均價線: {avg_cost:.2f}")
-            fig1.add_hrect(y0=avg_cost, y1=max(mx*1.1, avg_cost*1.1),
-                           fillcolor="green", opacity=0.1, layer="below", line_width=0)
-            fig1.add_hrect(y0=min(mi*0.9, avg_cost*0.9), y1=avg_cost,
-                           fillcolor="red", opacity=0.1, layer="below", line_width=0)
-        fig1.add_annotation(x=rp.idxmax(), y=mx, text=f"高:{mx:.2f}", showarrow=True, ay=-30)
-        fig1.add_annotation(x=rp.idxmin(), y=mi, text=f"低:{mi:.2f}", showarrow=True, ay=30)
-        fig1.add_annotation(x=rp.index[-1], y=lt, text=f"最新:{lt:.2f}", showarrow=True, ax=40)
+            fig1.add_hline(y=avg_cost, line_dash="dash", line_color="#10B981",
+                           annotation_text=f" 均價線: {avg_cost:.2f}", 
+                           annotation_position="bottom right", annotation_font_color="#10B981")
+
+        # 簡化最高/最低標籤，拿掉笨重的框框
+        fig1.add_annotation(x=rp.idxmax(), y=mx, text=f"高:{mx:.2f}", showarrow=True, arrowcolor="#888", ay=-30)
+        fig1.add_annotation(x=rp.idxmin(), y=mi, text=f"低:{mi:.2f}", showarrow=True, arrowcolor="#888", ay=30)
+        fig1.add_annotation(x=rp.index[-1], y=lt, text=f"最新:{lt:.2f}", showarrow=True, arrowcolor="#888", ax=40)
+        
         y0 = min(mi*0.9, avg_cost*0.9) if avg_cost > 0 else mi*0.9
         y1 = max(mx*1.1, avg_cost*1.1) if avg_cost > 0 else mx*1.1
-        fig1.update_yaxes(range=[y0, y1])
+        fig1.update_layout(**modern_layout, yaxis_range=[y0, y1])
         st.plotly_chart(fig1, use_container_width=True)
 
-        # B. 乖離率
+        # ── B. 乖離率 ──
         st.write("📊 **B. 多空戰術乖離率**")
         bias = (rp - rp.rolling(20).mean()) / rp.rolling(20).mean() * 100
         bc   = bias.dropna()
         if not bc.empty:
             fig2 = go.Figure()
-            fig2.add_trace(go.Scatter(x=bc.index, y=bc.values, name="乖離%", line=dict(color="#F4A261")))
-            for v, c, t in [(-5, "gray", "標準(-5)"), (-10, "orange", "恐慌(-10)"), (-15, "red", "重壓(-15)")]:
-                fig2.add_hline(y=v, line_dash="dot", line_color=c, annotation_text=t)
+            fig2.add_trace(go.Scatter(
+                x=bc.index, y=bc.values, name="乖離%", 
+                line=dict(color="#F59E0B", width=2), # 琥珀橘
+                fill='tozeroy', fillcolor='rgba(245, 158, 11, 0.08)'
+            ))
+            
+            # 輔助線改用半透明，降低視覺干擾
+            for v, c, t in [(-5, "rgba(128,128,128,0.5)", "標準(-5)"), 
+                            (-10, "rgba(245,158,11,0.5)", "恐慌(-10)"), 
+                            (-15, "rgba(239,68,68,0.5)", "重壓(-15)")]:
+                fig2.add_hline(y=v, line_dash="dot", line_color=c, annotation_text=t, 
+                               annotation_position="bottom right", annotation_font_color=c)
+                
             bx, bi, bl = bc.max(), bc.min(), bc.iloc[-1]
-            fig2.add_hrect(y0=0, y1=max(bx*1.2, 10), fillcolor="green", opacity=0.1, layer="below", line_width=0)
-            fig2.add_hrect(y0=min(bi*1.2, -20), y1=0, fillcolor="red", opacity=0.1, layer="below", line_width=0)
-            fig2.add_annotation(x=bc.idxmax(), y=bx, text=f"最高:{bx:.1f}%", showarrow=True, ay=-30)
-            fig2.add_annotation(x=bc.idxmin(), y=bi, text=f"最低:{bi:.1f}%", showarrow=True, ay=30)
-            fig2.add_annotation(x=bc.index[-1], y=bl, text=f"最新:{bl:.1f}%", showarrow=True, ax=40)
-            fig2.update_yaxes(range=[min(bi*1.2, -20), max(bx*1.2, 15)])
+            fig2.add_annotation(x=bc.idxmax(), y=bx, text=f"最高:{bx:.1f}%", showarrow=True, arrowcolor="#888", ay=-30)
+            fig2.add_annotation(x=bc.idxmin(), y=bi, text=f"最低:{bi:.1f}%", showarrow=True, arrowcolor="#888", ay=30)
+            fig2.add_annotation(x=bc.index[-1], y=bl, text=f"最新:{bl:.1f}%", showarrow=True, arrowcolor="#888", ax=40)
+            fig2.update_layout(**modern_layout, yaxis_range=[min(bi*1.2, -20), max(bx*1.2, 15)])
             st.plotly_chart(fig2, use_container_width=True)
 
-        # C. 損益軌跡
+        # ── C. 損益軌跡 ──
         st.write("💰 **C. 庫存真實損益軌跡**")
         buy_df = tw_trade.get("raw_buys", pd.DataFrame())
         if not buy_df.empty:
             th = buy_df.groupby("成交日期")[["庫存股數", "持有成本"]].sum().reindex(rp.index).fillna(0)
-            # 帳本已是分割後多股數，與 adjusted price 同尺度，直接 cumsum 即可。
             ds = th["庫存股數"].cumsum()
             dc = th["持有成本"].cumsum()
             dp = np.where(dc > 0, (ds * rp - dc) / dc * 100, 0)
             dp_s = pd.Series(dp, index=rp.index).dropna()
+            
             if not dp_s.empty:
                 px, pi, pl = dp_s.max(), dp_s.min(), dp_s.iloc[-1]
                 fig3 = go.Figure()
-                fig3.add_trace(go.Scatter(x=dp_s.index, y=dp_s.values, line=dict(color="#247BA0")))
-                fig3.add_hrect(y0=0, y1=max(px*1.2, 10), fillcolor="green", opacity=0.1, layer="below", line_width=0)
-                fig3.add_hrect(y0=min(pi*1.2, -10), y1=0, fillcolor="red", opacity=0.1, layer="below", line_width=0)
-                fig3.add_annotation(x=dp_s.idxmax(), y=px, text=f"最高:{px:.1f}%", showarrow=True, ay=-30)
-                fig3.add_annotation(x=dp_s.idxmin(), y=pi, text=f"最低:{pi:.1f}%", showarrow=True, ay=30)
-                fig3.add_annotation(x=dp_s.index[-1], y=pl, text=f"最新:{pl:.1f}%", showarrow=True, ax=40)
-                fig3.update_yaxes(range=[min(pi*1.2, -15), max(px*1.2, 20)])
+                fig3.add_trace(go.Scatter(
+                    x=dp_s.index, y=dp_s.values, name="總報酬",
+                    line=dict(color="#0EA5E9", width=2.5), # 天空藍
+                    fill='tozeroy', fillcolor='rgba(14, 165, 233, 0.08)'
+                ))
+                fig3.add_hline(y=0, line_dash="dash", line_color="rgba(128,128,128,0.5)")
+                
+                fig3.add_annotation(x=dp_s.idxmax(), y=px, text=f"最高:{px:.1f}%", showarrow=True, arrowcolor="#888", ay=-30)
+                fig3.add_annotation(x=dp_s.idxmin(), y=pi, text=f"最低:{pi:.1f}%", showarrow=True, arrowcolor="#888", ay=30)
+                fig3.add_annotation(x=dp_s.index[-1], y=pl, text=f"最新:{pl:.1f}%", showarrow=True, arrowcolor="#888", ax=40)
+                fig3.update_layout(**modern_layout, yaxis_range=[min(pi*1.2, -15), max(px*1.2, 20)])
                 st.plotly_chart(fig3, use_container_width=True)
-        # D. 成本 vs 市值（金額軌跡）
+
+        # ── D. 成本 vs 市值（金額軌跡）──
         st.write("💴 **D. 庫存成本 vs 市值 金額軌跡**")
         if not buy_df.empty:
             mv_m = (ds * rp) / 1_000_000
@@ -1013,36 +1046,47 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
             sign = "+" if last_pnl >= 0 else ""
 
             fig4 = go.Figure()
-            fig4.add_trace(go.Scatter(x=cc_m.index, y=cc_m.values, name="累積成本", line=dict(color="#888888", width=2)))
-            fig4.add_trace(go.Scatter(x=mv_m.index, y=mv_m.values, name="市值", line=dict(color="#2EC4B6", width=2.5)))
-            fig4.add_annotation(x=mv_m.idxmax(), y=mv_m.max(), text=f"最高:{mv_m.max():.2f}M", showarrow=True, ay=-30)
-            fig4.add_annotation(x=mv_m.index[-1], y=mv_m.iloc[-1], text=f"最新:{true_val_m:.2f}M", showarrow=True, ax=40)
-            fig4.add_annotation(x=cc_m.index[-1], y=cc_m.iloc[-1], text=f"成本:{true_cost_m:.2f}M", showarrow=True, ay=30, ax=40)
+            # 先畫成本線 (底層)
+            fig4.add_trace(go.Scatter(
+                x=cc_m.index, y=cc_m.values, name="累積成本", 
+                line=dict(color="#94A3B8", width=2, dash="dot") # 質感岩灰色+虛線
+            ))
+            # 再畫市值線 (上層)，利用 'tonexty' 填滿與成本線之間的縫隙！
+            fig4.add_trace(go.Scatter(
+                x=mv_m.index, y=mv_m.values, name="市值", 
+                line=dict(color="#10B981", width=2.5), # 翡翠綠
+                fill='tonexty', fillcolor='rgba(16, 185, 129, 0.15)' # 把獲利區間填上淡綠色
+            ))
+            
+            fig4.add_annotation(x=mv_m.idxmax(), y=mv_m.max(), text=f"最高:{mv_m.max():.2f}M", showarrow=True, arrowcolor="#888", ay=-30)
+            fig4.add_annotation(x=mv_m.index[-1], y=mv_m.iloc[-1], text=f"最新:{true_val_m:.2f}M", showarrow=True, arrowcolor="#888", ax=40)
+            fig4.add_annotation(x=cc_m.index[-1], y=cc_m.iloc[-1], text=f"成本:{true_cost_m:.2f}M", showarrow=True, arrowcolor="#888", ay=30, ax=40)
+            
+            fig4.update_layout(**modern_layout)
             st.plotly_chart(fig4, use_container_width=True)
 
             # 損益單獨一行顯示在圖下方
-            hist_pnl_m   = (mv_m - cc_m)[cc_m > 0]   # 只看有成本的區間
+            hist_pnl_m   = (mv_m - cc_m)[cc_m > 0]
             max_pnl_m    = hist_pnl_m.max()
             max_pnl_date = hist_pnl_m.idxmax().strftime("%Y-%m-%d")
 
-            # 即時報價(Fugle)可能比 yfinance 歷史序列更高（盤中新高）
-            # 兩個比一下，即時損益贏了就以今天為準
             if last_pnl > max_pnl_m:
                 max_pnl_m    = last_pnl
                 max_pnl_date = datetime.today().strftime("%Y-%m-%d")
 
-            pnl_color = "#2EC4B6" if last_pnl >= 0 else "#E71D36"
+            pnl_color = "#10B981" if last_pnl >= 0 else "#EF4444"
             is_today_peak = (max_pnl_date == datetime.today().strftime("%Y-%m-%d"))
             peak_label = "🏆 歷史最大損益🚀" if is_today_peak else "🏆 歷史最大損益"
+            
             st.markdown(
-                f"<p style='color:#FFD700; font-size:16px; margin:0'>{peak_label}：$ {max_pnl_m:.2f}M（{max_pnl_date}）</p>"
-                f"<p style='color:{pnl_color}; font-size:16px; margin:0'>目前損益：{sign}$ {last_pnl:.2f}M</p>",
+                f"<p style='color:#F59E0B; font-size:16px; margin:0; font-weight: bold;'>{peak_label}：$ {max_pnl_m:.2f}M（{max_pnl_date}）</p>"
+                f"<p style='color:{pnl_color}; font-size:16px; margin:0; font-weight: bold;'>目前損益：{sign}$ {last_pnl:.2f}M</p>",
                 unsafe_allow_html=True
             )
 
-
     except Exception as e:
         st.error(f"圖表載入失敗，請稍後重試。({e})")
+
 
 
 def render_tab_us(us_live: dict, port: dict, grid: dict,
@@ -1859,8 +1903,8 @@ def main():
 
     # ── 投資階段判定 ──
     annual_expense = params.get("annual_expense", 600_000)
-    phase_info = detect_phase(port["fc_total_twd"], annual_expense)
-    nav_info   = compute_phase1_nav(port["fc_total_twd"], cash_twd, annual_expense)
+    phase_info = detect_phase(port["fc_tw_twd"], annual_expense)
+    nav_info   = compute_phase1_nav(port["fc_tw_twd"], cash_twd, annual_expense)
 
     # ── 渲染四個 Tab ──
     tab1, tab2, tab3, tab4 = st.tabs(["💰 台股", "💵 美股", "🛬 生命周期 & 退休", "🏭 南亞科"])
