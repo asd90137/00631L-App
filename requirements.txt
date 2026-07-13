@@ -7,3 +7,5 @@ st-gsheets-connection
 fugle-marketdata
 alpaca-py
 streamlit-autorefresh
+numpy<2.0.0
+
