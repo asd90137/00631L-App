@@ -1,4 +1,4 @@
-import streamlit as st
+    import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -445,6 +445,7 @@ def compute_portfolio(tw_trade: dict, us_live: dict,
     cost_tw_twd = tw_trade["cost"]
     exp_tw_twd  = val_tw_twd * 2
     fc_tw_twd   = val_tw_twd + cash_twd - loan_twd
+    gross_tw_twd = val_tw_twd + cash_twd
     pct_tw      = (exp_tw_twd / fc_tw_twd * 100) if fc_tw_twd > 0 else 0
     daily_pnl_twd = (p_tw_curr - p_tw_yest) * tw_trade["shares"]
     roi_tw      = (val_tw_twd / cost_tw_twd - 1) if cost_tw_twd > 0 else 0
@@ -469,7 +470,7 @@ def compute_portfolio(tw_trade: dict, us_live: dict,
 
     return dict(
         val_tw_twd=val_tw_twd, cost_tw_twd=cost_tw_twd,
-        exp_tw_twd=exp_tw_twd, fc_tw_twd=fc_tw_twd,
+        exp_tw_twd=exp_tw_twd, fc_tw_twd=fc_tw_twd, gross_tw_twd=gross_tw_twd,
         pct_tw=pct_tw, daily_pnl_twd=daily_pnl_twd, roi_tw=roi_tw,
 
         val_us_usd=val_us_usd, cost_us_usd=cost_us_usd,
@@ -704,7 +705,7 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
 
     st.caption(f"現金目標比 **{ph.get('cash_lo', 0):.0f}%～{ph.get('cash_hi', 0):.0f}%**")
     # ── 現金水位一覽卡片 ──
-    target_cash_amt = target_cr * port["fc_tw_twd"]
+    target_cash_amt = target_cr * port["gross_tw_twd"]
     cash_gap = target_cash_amt - cash_twd
     gap_color = "#E71D36" if cash_gap > 0 else "#2EC4B6"
     gap_label = f"還缺 NT$ {cash_gap:,.0f}" if cash_gap > 0 else f"已超出 NT$ {abs(cash_gap):,.0f}"
@@ -722,7 +723,7 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
         '<div class="cash-card">'
         '<div class="cash-item">'
         '<div class="cash-label">💰 目前總資產</div>'
-        f'<div class="cash-value">NT$ {port["fc_tw_twd"]/10000:,.0f} 萬</div>'
+        f'<div class="cash-value">NT$ {port["gross_tw_twd"]/10000:,.0f} 萬</div>'
         '</div>'
         '<div class="cash-item">'
         '<div class="cash-label">🎯 目標現金比</div>'
@@ -744,6 +745,7 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
         '</div>'
     )
     st.markdown(cash_overview_css + cash_overview_html, unsafe_allow_html=True)
+    st.caption(f"🏦 信貸總餘額（風險標記，未扣入現金比計算）：NT$ {(loan1+loan2)/10000:,.0f} 萬")
 
 
 
@@ -752,7 +754,7 @@ def render_tab_tw(tw_trade: dict, port: dict, p_tw_curr: float, p_tw_yest: float
     if birthday:
         if today_d.month == birthday.month and today_d.day == birthday.day:
             if current_cr < target_cr * 0.8:
-                gap = target_cr * port["fc_tw_twd"] - cash_twd
+                gap = target_cr * port["gross_tw_twd"] - cash_twd
                 shares_to_sell = gap / p_tw_curr if p_tw_curr > 0 else 0
                 st.error(
                     f"🎂 **生日再平衡警報！** "
@@ -1903,8 +1905,8 @@ def main():
 
     # ── 投資階段判定 ──
     annual_expense = params.get("annual_expense", 600_000)
-    phase_info = detect_phase(port["fc_tw_twd"], annual_expense)
-    nav_info   = compute_phase1_nav(port["fc_tw_twd"], cash_twd, annual_expense)
+    phase_info = detect_phase(port["gross_tw_twd"], annual_expense)
+    nav_info   = compute_phase1_nav(port["gross_tw_twd"], cash_twd, annual_expense)
 
     # ── 渲染四個 Tab ──
     tab1, tab2, tab3, tab4 = st.tabs(["💰 台股", "💵 美股", "🛬 生命周期 & 退休", "🏭 南亞科"])
