@@ -388,16 +388,7 @@ def parse_soxl_grid(df_raw: pd.DataFrame) -> dict:
     return result
 
 
-def parse_cash_parking(df_raw: pd.DataFrame) -> list[dict]:
-    """
-    解析美股帳本中的「資金停泊區」（CD / T-Bill）。
-    Google Sheets 格式（獨立區塊，標題列含關鍵字）：
-      停泊類型 | 金額(USD) | 到期日 | 備註
-    回傳 list of dict，每筆含：type, amount_usd, maturity, note, days_left
-    """
-    result = []
-    if df_raw.empty:
-        return result
+
 
     col_type = next((c for c in df_raw.columns if "停泊" in str(c) or "類型" in str(c) and "停" in str(c)), None)
     col_amt  = next((c for c in df_raw.columns if "停泊" in str(c) and "金額" in str(c) or ("金額" in str(c))), None)
@@ -434,8 +425,7 @@ def parse_cash_parking(df_raw: pd.DataFrame) -> list[dict]:
 def compute_portfolio(tw_trade: dict, us_live: dict,
                       p_tw_curr: float, p_tw_yest: float,
                       cash_twd: float, loan_twd: float,
-                      us_cash_usd: float, usd_twd: float,
-                      cash_parking: list = None) -> dict:
+                      us_cash_usd: float, usd_twd: float) -> dict:
     """
     彙整雙帳戶資產、曝險度。
     所有台幣金額後綴 _twd，美元後綴 _usd。
@@ -457,8 +447,7 @@ def compute_portfolio(tw_trade: dict, us_live: dict,
         v["shares"] * v["curr"] * CONFIG.LEVERAGE_MAP.get(t, 1)
         for t, v in us_live.items()
     )
-    cd_total_usd = sum(p["amount_usd"] for p in (cash_parking or []))
-    fc_us_usd   = val_us_usd + us_cash_usd + cd_total_usd
+    fc_us_usd   = val_us_usd + us_cash_usd
     pct_us      = (exp_us_usd / fc_us_usd * 100) if fc_us_usd > 0 else 0
     daily_pnl_usd = sum((v["curr"] - v["yest"]) * v["shares"] for v in us_live.values())
     us_roi      = (val_us_usd / cost_us_usd - 1) if cost_us_usd > 0 else 0
@@ -479,6 +468,7 @@ def compute_portfolio(tw_trade: dict, us_live: dict,
 
         fc_total_twd=fc_total_twd, exp_total_twd=exp_total_twd, pct_total=pct_total,
     )
+
 def detect_phase(total_asset_twd: float, annual_expense_twd: float) -> dict:
     """根據 總資產 ÷ 年支出 倍數判斷投資階段"""
     multiple = (total_asset_twd / annual_expense_twd) if annual_expense_twd > 0 else 0.0
@@ -1092,8 +1082,7 @@ def _render_tw_charts(tw_trade: dict, p_tw_curr: float, p_tw_yest: float):
 
 
 def render_tab_us(us_live: dict, port: dict, grid: dict,
-                  us_cash_usd: float, usd_twd: float, us_session: str = "",
-                  cash_parking: list = None):
+                  us_cash_usd: float, usd_twd: float, us_session: str = ""):
     """Tab 2 美股完整 UI"""
     soxl = us_live.get("SOXL", {})
     soxl_curr = soxl.get("curr", 0)
@@ -1107,40 +1096,40 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
 
     st.subheader("🎯 SOXL 網格進出戰略")
 
-# === 新版 SOXL 網格動態儀表板 ===
+    # === 新版 SOXL 網格動態儀表板 ===
     g = grid
     curr = soxl_curr
-    avg = g["avg_price"]
-    tp = g["tp_price"]
-    add = g["next_add_price"]
+    avg = g.get("avg_price", 0)
+    tp = g.get("tp_price", 0)
+    add = g.get("next_add_price", 0)
 
     cur_roi = (curr / avg - 1) * 100 if avg > 0 else 0
     tp_dist = (tp / curr - 1) * 100 if curr > 0 and tp > 0 else 0
     add_dist = (add / curr - 1) * 100 if curr > 0 and add > 0 else 0
-    est_profit = (tp - avg) * g["total_shares"] if avg > 0 else 0
+    est_profit = (tp - avg) * g.get("total_shares", 0) if avg > 0 else 0
 
-    # 1. 動態狀態判斷與文案（注意：$ 一律用 \$ 跳脫，避免 st.markdown 誤判成 LaTeX）
+    # 1. 動態狀態判斷與文案
     if curr >= tp and tp > 0:
-        stage_name = f"🎉 狀態：達標停利 (第 {g['tranche_no']} 份)"
+        stage_name = f"🎉 狀態：達標停利 (第 {g.get('tranche_no', 0)} 份)"
         status_text = f"💰 預估獲利入袋 +\\${est_profit:,.0f}"
     elif curr >= avg:
-        stage_name = f"📈 狀態：獲利向上 (第 {g['tranche_no']} 份)"
+        stage_name = f"📈 狀態：獲利向上 (第 {g.get('tranche_no', 0)} 份)"
         status_text = f"🎯 距停利 (\\${tp:.2f}) 還差 \\${tp - curr:.2f}"
     elif curr > add and add > 0:
-        stage_name = f"📉 狀態：蓄水向下 (第 {g['tranche_no']} 份)"
+        stage_name = f"📉 狀態：蓄水向下 (第 {g.get('tranche_no', 0)} 份)"
         status_text = f"⏳ 距加碼 (\\${add:.2f}) 還差 \\${curr - add:.2f}"
     elif add > 0:
-        stage_name = f"🎯 狀態：觸發加碼 (第 {g['tranche_no']} 份)"
-        status_text = f"🛒 準備買進 {g['next_add_shares']:,.0f} 股"
+        stage_name = f"🎯 狀態：觸發加碼 (第 {g.get('tranche_no', 0)} 份)"
+        status_text = f"🛒 準備買進 {g.get('next_add_shares', 0):,.0f} 股"
     else:
-        stage_name = f"🔒 狀態：已滿倉 (第 {g['tranche_no']} 份)"
+        stage_name = f"🔒 狀態：已滿倉 (第 {g.get('tranche_no', 0)} 份)"
         status_text = f"🎯 距停利 (\\${tp:.2f}) 還差 \\${tp - curr:.2f}"
 
     # 2. 顯示主大字：目前股價與狀態
     st.metric(stage_name, f"${curr:.2f}", f"{soxl_daily_pct:+.2f}%")
     st.markdown(status_text)
 
-# 3. 網格進度條（含均價位置標記）
+    # 3. 網格進度條（含均價位置標記）
     if tp > 0:
         range_min = add if add > 0 else (avg * 0.7)
         total_range = tp - range_min
@@ -1170,7 +1159,7 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
 
         add_str = f"${add:.2f}" if add > 0 else "已滿倉"
         add_sub = f"({add_dist:+.1f}%)" if add > 0 else ""
-        add_shares_str = f"買 {g['next_add_shares']:,.0f} 股" if add > 0 else ""
+        add_shares_str = f"買 {g.get('next_add_shares', 0):,.0f} 股" if add > 0 else ""
         tp_str  = f"${tp:.2f}"
         tp_sub  = f"(+{tp_dist:.1f}%)"
 
@@ -1194,7 +1183,7 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
             f'<div class="grid-sub">{add_shares_str}</div>'
             '</div>'
             '<div class="grid-box mid">'
-            f'<div class="grid-label">📦 均價（持倉 {g["total_shares"]:,.0f} 股）</div>'
+            f'<div class="grid-label">📦 均價（持倉 {g.get("total_shares", 0):,.0f} 股）</div>'
             f'<div class="grid-value">${avg:.2f}</div>'
             f'<div class="grid-sub">報酬 {cur_roi:+.1f}%</div>'
             '</div>'
@@ -1208,8 +1197,6 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
         st.markdown(grid_css + grid_html, unsafe_allow_html=True)
 
     st.divider()
-
-
 
     # 整體美股指標
     val  = port["val_us_usd"]
@@ -1236,84 +1223,58 @@ def render_tab_us(us_live: dict, port: dict, grid: dict,
     col_pie, col_info = st.columns([2, 1])
     with col_pie:
         st.write("📈 **美金資產配置比例 (USD)**")
-        # 加入 CD 停泊資金
-        cd_total = sum(p["amount_usd"] for p in (cash_parking or []))
-        labels = list(us_live.keys()) + ["美股可用現金", "CD停泊"]
-        values = [v["curr"] * v["shares"] for v in us_live.values()] + [us_cash_usd, cd_total]
-        fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4,
-                                     texttemplate="%{label}<br>$%{value:,.0f}<br>%{percent}")])
-        fig.update_layout(height=350, margin=dict(l=0, r=0, t=0, b=0))
-        st.plotly_chart(fig, use_container_width=True)
+        
+        # 💡 過濾 0% 的項目
+        labels_raw = list(us_live.keys()) + ["美股可用現金"]
+        values_raw = [v["curr"] * v["shares"] for v in us_live.values()] + [us_cash_usd]
+        labels = [l for l, v in zip(labels_raw, values_raw) if v > 0]
+        values = [v for v in values_raw if v > 0]
+        
+        if values:
+            fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4,
+                                         texttemplate="%{label}<br>$%{value:,.0f}<br>%{percent}")])
+            fig.update_layout(height=350, margin=dict(l=0, r=0, t=0, b=0))
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("目前無美股資產。")
+            
     with col_info:
         fc_us = port["fc_us_usd"]
-        st.info(f"💡 **美股獨立淨資產**\n\nUS$ {fc_us:,.0f}\n\n*美股市值 + 美股現金 + CD停泊*")
+        st.info(f"💡 **美股獨立淨資產**\n\nUS$ {fc_us:,.0f}\n\n*美股市值 + 美股現金*")
 
     # 個股明細
-    st.subheader("📦 個股明細")
     rows = []
     for t, info in us_live.items():
-        avg = info["cost"] / info["shares"] if info["shares"] > 0 else 0
+        if info.get("shares", 0) <= 0:  # 💡 過濾空庫存不顯示
+            continue
+            
+        avg = info["cost"] / info["shares"]
         l_roi = (info["curr"] / avg - 1) if avg > 0 else 0
         days_h = (datetime.today() - info["first_date"]).days if pd.notnull(info.get("first_date")) else 1
         l_ann  = ((1 + l_roi) ** (365 / max(days_h, 1)) - 1) * 100
         today_p = (info["curr"] - info["yest"]) * info["shares"]
         total_p = (info["curr"] - avg) * info["shares"]
         pct_d   = (info["curr"] / info["yest"] - 1) * 100 if info["yest"] > 0 else 0
-        session_label = info.get("session", "")
+        
         rows.append({
             "代號": t,
             "目前現價": f"${info['curr']:.2f}",
             "今日損益": f"${today_p:+,.2f} ({pct_d:+.2f}%)",
             "總損益":   f"${total_p:+,.2f} ({l_roi*100:+.2f}%)",
             "股數": f"{info['shares']:,.0f}",
-            "股數": f"{info['shares']:,.0f}",
             "均價": f"${avg:.2f}",
             "成本": f"${info['cost']:,.0f}",
             "昨日收盤": f"${info['yest']:.2f}",
             "年化報酬": f"{l_ann:+.2f}%",
         })
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
-    st.write("---")
-
-    # ── 資金停泊區 UI (移動至此，移除 expander 改為直接展開) ──
-    st.subheader("🅿️ 資金停泊區")
-    parking  = cash_parking or []
-    tmf_info = us_live.get("TMF", {})
-    tmf_val  = tmf_info.get("curr", 0) * tmf_info.get("shares", 0)
-    total_parked = sum(p["amount_usd"] for p in parking) + tmf_val
-
-    if not parking and tmf_val == 0:
-        st.info("目前無 CD / T-Bill 停泊紀錄。閒置資金建議停泊於 **1～3 個月期美國國債**，等待大跌機會。")
-    else:
-        st.caption(f"總閒置資金合計：**${total_parked:,.0f} USD**（含 TMF 市值）")
-        if parking:
-            park_rows = []
-            for p in sorted(parking, key=lambda x: x["maturity"] or datetime.max.date()):
-                days = p["days_left"]
-                if days is None:
-                    days_str, urgency = "N/A", ""
-                elif days <= 0:
-                    days_str, urgency = "✅ 已到期", "🔴"
-                elif days <= 7:
-                    days_str, urgency = f"⚠️ {days} 天後到期", "🟠"
-                else:
-                    days_str, urgency = f"{days} 天後到期", "🟡"
-                park_rows.append({
-                    "類型": p["type"],
-                    "金額 (USD)": f"${p['amount_usd']:,.0f}",
-                    "到期日": str(p["maturity"]) if p["maturity"] else "N/A",
-                    "狀態": f"{urgency} {days_str}",
-                    "備註": p["note"],
-                })
-            st.dataframe(pd.DataFrame(park_rows), use_container_width=True, hide_index=True)
-        if tmf_val > 0:
-            tmf_shares = tmf_info.get("shares", 0)
-            tmf_price  = tmf_info.get("curr", 0)
-            
+        
+    if rows:
+        st.subheader("📦 個股明細")
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
     st.divider()
     st.link_button("🛒 新增美股交易紀錄 (Google Sheets)", CONFIG.SHEET_US, use_container_width=True)
+
 
 
 def render_tab_lifecycle(port: dict, base_m: float, hc_years_default: int, target_k: float,
@@ -1890,18 +1851,16 @@ def main():
     # 解析 SOXL 網格
     grid = parse_soxl_grid(df_us_raw)
 
-    # 解析資金停泊區（CD / T-Bill）
-    cash_parking = parse_cash_parking(df_us_raw)
-
     # 計算資產組合
     loan_total = params["loan1"] + params["loan2"]
     port = compute_portfolio(
-    tw_trade, us_live,
-    p_tw_curr, p_tw_yest,
-    cash_twd, loan_total,
-    us_cash_usd, params["usd_twd"],
-    cash_parking=cash_parking,
+        tw_trade, us_live,
+        p_tw_curr, p_tw_yest,
+        cash_twd, loan_total,
+        us_cash_usd, params["usd_twd"]
     )
+
+
 
     # ── 投資階段判定 ──
     annual_expense = params.get("annual_expense", 600_000)
@@ -1918,7 +1877,7 @@ def main():
                       nav_info=nav_info, birthday=params.get("birthday"))
 
     with tab2:
-        render_tab_us(us_live, port, grid, us_cash_usd, params["usd_twd"], us_session, cash_parking)
+        render_tab_us(us_live, port, grid, us_cash_usd, params["usd_twd"], us_session)
 
     with tab3:
         render_tab_lifecycle(
